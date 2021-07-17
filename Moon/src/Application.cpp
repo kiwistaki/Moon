@@ -2,31 +2,21 @@
 #include "Application.h"
 
 #include "DDSTextureLoader.h"
-#include <SDL.h>
-#include <SDL_syswm.h>
-
-#include <chrono>
 #include <iostream>
 #include <fstream>
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
+Moon::Application* gApplication = nullptr;
+
 namespace Moon
 {
 	void Application::Init()
 	{
-		// initialize SDL
-		SDL_Init(SDL_INIT_VIDEO);
-		SDL_WindowFlags window_flags = (SDL_WindowFlags)(0);
-		mWindow = SDL_CreateWindow(
-			"Moon",
-			SDL_WINDOWPOS_UNDEFINED,
-			SDL_WINDOWPOS_UNDEFINED,
-			mWidth,
-			mHeight,
-			window_flags
-		);
+		gApplication = this;
+
+		InitMainWindow();
 
 		mRenderDoc = new Moon::RenderDoc();
 
@@ -43,8 +33,10 @@ namespace Moon
 		InitScene();
 		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(mCommandList.Get());
 
-		mCamera = new Camera(static_cast<float>(mWidth), static_cast<float>(mHeight));
+		mCamera = new Camera(static_cast<float>(mClientWidth), static_cast<float>(mClientHeight));
 		mCamera->SetPosition(0.0f, 2.0f, 0.0f);
+
+		isD3D12Initialized = true;
 	}
 
 	void Application::Cleanup()
@@ -59,36 +51,33 @@ namespace Moon
 			mRenderDoc->Deinit();
 			delete mRenderDoc;
 		}
-
-		SDL_DestroyWindow(mWindow);
 	}
 
 	void Application::Run()
 	{
-		SDL_Event e;
-		bool bQuit = false;
-		std::chrono::time_point<std::chrono::system_clock> start, end;
+		MSG msg = { 0 };
+		mTimer.Reset();
 
-		start = std::chrono::system_clock::now();
-		end = std::chrono::system_clock::now();
-
-		//main loop
-		while (!bQuit)
+		while (msg.message != WM_QUIT)
 		{
-			end = std::chrono::system_clock::now();
-			std::chrono::duration<float> elapsed_seconds = end - start;
-			float frametime = elapsed_seconds.count() * 1000.f;
-			start = std::chrono::system_clock::now();
-
-			while (SDL_PollEvent(&e) != 0)
+			if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
 			{
-				bool isESCPressed = e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE;
-				if (e.type == SDL_QUIT || isESCPressed) bQuit = true;
-
-				//mCamera.process_input_event(&e);
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
 			}
-			//mCamera.update_camera(frametime);
-			Draw();
+			else
+			{
+				mTimer.Tick();
+				if (!mAppPaused)
+				{
+					UpdateCamera(mTimer);
+					Draw();
+				}
+				else
+				{
+					Sleep(100);
+				}
+			}
 		}
 	}
 
@@ -206,6 +195,64 @@ namespace Moon
 		}
 	}
 
+	void Application::UpdateCamera(const Timer& timer)
+	{
+		const float dt = timer.DeltaTime();
+		float movementSpeed = 10.0f;
+
+		if (GetAsyncKeyState(VK_LSHIFT) & 0x8000)
+			movementSpeed *= 5;
+
+		if (GetAsyncKeyState('W') & 0x8000)
+			mCamera->Walk(movementSpeed * dt);
+
+		if (GetAsyncKeyState('S') & 0x8000)
+			mCamera->Walk(-movementSpeed * dt);
+
+		if (GetAsyncKeyState('A') & 0x8000)
+			mCamera->Strafe(-movementSpeed * dt);
+
+		if (GetAsyncKeyState('D') & 0x8000)
+			mCamera->Strafe(movementSpeed * dt);
+
+		mCamera->UpdateViewMatrix();
+	}
+
+	void Application::InitMainWindow()
+	{
+		WNDCLASS wc;
+		wc.style = CS_HREDRAW | CS_VREDRAW;
+		wc.lpfnWndProc = MsgProc;
+		wc.cbClsExtra = 0;
+		wc.cbWndExtra = 0;
+		wc.hInstance = mhAppInst;
+		wc.hIcon = LoadIcon(0, IDI_APPLICATION);
+		wc.hCursor = LoadCursor(0, IDC_ARROW);
+		wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+		wc.lpszMenuName = 0;
+		wc.lpszClassName = L"MainWnd";
+
+		if (!RegisterClass(&wc))
+		{
+			MessageBox(0, L"RegisterClass Failed.", 0, 0);
+		}
+
+		mRect = { 0, 0, mClientWidth, mClientHeight };
+		AdjustWindowRect(&mRect, WS_OVERLAPPEDWINDOW, false);
+		int width = mRect.right - mRect.left;
+		int height = mRect.bottom - mRect.top;
+
+		mhMainWnd = CreateWindow(L"MainWnd", mMainWndCaption.c_str(),
+			WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0, mhAppInst, 0);
+		if (!mhMainWnd)
+		{
+			MessageBox(0, L"CreateWindow Failed.", 0, 0);
+		}
+
+		ShowWindow(mhMainWnd, SW_SHOW);
+		UpdateWindow(mhMainWnd);
+	}
+
 	void Application::InitD3D12()
 	{
 #if DX12_ENABLE_DEBUG_LAYER
@@ -295,14 +342,9 @@ namespace Moon
 	{
 		mSwapchain.Reset();
 
-		SDL_SysWMinfo wmInfo;
-		SDL_VERSION(&wmInfo.version);
-		SDL_GetWindowWMInfo(mWindow, &wmInfo);
-		HWND hwnd = wmInfo.info.win.window;
-
 		DXGI_SWAP_CHAIN_DESC sd;
-		sd.BufferDesc.Width = mHeight;
-		sd.BufferDesc.Height = mWidth;
+		sd.BufferDesc.Width = mClientHeight;
+		sd.BufferDesc.Height = mClientWidth;
 		sd.BufferDesc.RefreshRate.Numerator = 60;
 		sd.BufferDesc.RefreshRate.Denominator = 1;
 		sd.BufferDesc.Format = mBackBufferFormat;
@@ -312,12 +354,12 @@ namespace Moon
 		sd.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 		sd.BufferCount = BACKBUFFER_COUNT;
-		sd.OutputWindow = hwnd;
+		sd.OutputWindow = mhMainWnd;
 		sd.Windowed = true;
 		sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 		sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 		DX_CHECK(mFactory->CreateSwapChain(
-			mQueues->GetGraphicsQueue()->GetCommandQueue(),//mGraphicsQueue.Get(),
+			mQueues->GetGraphicsQueue()->GetCommandQueue(),
 			&sd,
 			mSwapchain.GetAddressOf()));
 	}
@@ -361,7 +403,7 @@ namespace Moon
 
 		DX_CHECK(mSwapchain->ResizeBuffers(
 			BACKBUFFER_COUNT,
-			mWidth, mHeight,
+			mClientWidth, mClientHeight,
 			mBackBufferFormat,
 			DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
@@ -379,8 +421,8 @@ namespace Moon
 		D3D12_RESOURCE_DESC depthStencilDesc;
 		depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		depthStencilDesc.Alignment = 0;
-		depthStencilDesc.Width = mWidth;
-		depthStencilDesc.Height = mHeight;
+		depthStencilDesc.Width = mClientWidth;
+		depthStencilDesc.Height = mClientHeight;
 		depthStencilDesc.DepthOrArraySize = 1;
 		depthStencilDesc.MipLevels = 1;
 		depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
@@ -415,12 +457,12 @@ namespace Moon
 
 		mScreenViewport.TopLeftX = 0;
 		mScreenViewport.TopLeftY = 0;
-		mScreenViewport.Width = static_cast<float>(mWidth);
-		mScreenViewport.Height = static_cast<float>(mHeight);
+		mScreenViewport.Width = static_cast<float>(mClientWidth);
+		mScreenViewport.Height = static_cast<float>(mClientHeight);
 		mScreenViewport.MinDepth = 0.0f;
 		mScreenViewport.MaxDepth = 1.0f;
 
-		mScissorRect = { 0, 0, mWidth, mHeight };
+		mScissorRect = { 0, 0, mClientWidth, mClientHeight };
 	}
 
 	void Application::InitPipeline()
@@ -698,4 +740,224 @@ namespace Moon
 		return defaultBuffer;
 	}
 
+	void Application::SetFullscreen(bool fullscreen)
+	{
+		if (mFullscreenState != fullscreen)
+		{
+			mFullscreenState = fullscreen;
+			if (mFullscreenState) // Switching to fullscreen.
+			{
+				// Store the current window dimensions so they can be restored 
+				// when switching out of fullscreen state.
+				::GetWindowRect(mhMainWnd, &mRect);
+
+				mPreviousClientWidth = mClientWidth;
+				mPreviousClientHeight = mClientHeight;
+
+				// Set the window style to a borderless window so the client area fills
+				// the entire screen.
+				UINT windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+				::SetWindowLongW(mhMainWnd, GWL_STYLE, windowStyle);
+
+				// Query the name of the nearest display device for the window.
+				// This is required to set the fullscreen dimensions of the window
+				// when using a multi-monitor setup.
+				HMONITOR hMonitor = ::MonitorFromWindow(mhMainWnd, MONITOR_DEFAULTTONEAREST);
+				MONITORINFOEX monitorInfo = {};
+				monitorInfo.cbSize = sizeof(MONITORINFOEX);
+				::GetMonitorInfo(hMonitor, &monitorInfo);
+				::SetWindowPos(mhMainWnd, HWND_TOPMOST,
+					monitorInfo.rcMonitor.left,
+					monitorInfo.rcMonitor.top,
+					monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+					monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+					SWP_FRAMECHANGED | SWP_NOACTIVATE);
+				::ShowWindow(mhMainWnd, SW_MAXIMIZE);
+
+				/*MN_ENGINE_INFO("Fullscreen Rect-> L:{0} R:{1} T:{2} B:{3}",
+					monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.right,
+					monitorInfo.rcMonitor.top, monitorInfo.rcMonitor.bottom);*/
+
+				//Resize Swapchain to match fullscreen
+				mClientWidth = monitorInfo.rcMonitor.right;
+				mClientHeight = monitorInfo.rcMonitor.bottom;
+				OnResize();
+			}
+			else
+			{
+				// Restore all the window decorators.
+				::SetWindowLong(mhMainWnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
+				::SetWindowPos(mhMainWnd, HWND_NOTOPMOST,
+					mRect.left,
+					mRect.top,
+					mRect.right - mRect.left,
+					mRect.bottom - mRect.top,
+					SWP_FRAMECHANGED | SWP_NOACTIVATE);
+				::ShowWindow(mhMainWnd, SW_NORMAL);
+
+				//Resize Swapchain to match windowed
+				mClientWidth = mPreviousClientWidth;
+				mClientHeight = mPreviousClientHeight;
+				OnResize();
+			}
+		}
+	}
+
+	void Application::OnMouseDown(WPARAM btnState, int x, int y)
+	{
+		mLastMousePos.x = x;
+		mLastMousePos.y = y;
+	}
+
+	void Application::OnMouseUp(WPARAM btnState, int x, int y)
+	{
+	}
+
+	void Application::OnMouseMove(WPARAM btnState, int x, int y)
+	{
+		if ((btnState & MK_LBUTTON) != 0)
+		{
+			float dx = DirectX::XMConvertToRadians(0.25f * static_cast<float>(x - mLastMousePos.x));
+			float dy = DirectX::XMConvertToRadians(0.25f * static_cast<float>(y - mLastMousePos.y));
+
+			mCamera->Pitch(dy);
+			mCamera->RotateY(dx);
+		}
+		mLastMousePos.x = static_cast<LONG>(x);
+		mLastMousePos.y = static_cast<LONG>(y);
+	}
+
+	LRESULT Application::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (msg)
+		{
+		case WM_ACTIVATE:
+			if (LOWORD(wParam) == WA_INACTIVE)
+			{
+				gApplication->mAppPaused = true;
+				gApplication->mTimer.Stop();
+			}
+			else
+			{
+				gApplication->mAppPaused = false;
+				gApplication->mTimer.Start();
+			}
+			return 0;
+
+		case WM_SIZE:
+			// Save the new client area dimensions.
+			gApplication->mClientWidth = LOWORD(lParam);
+			gApplication->mClientHeight = HIWORD(lParam);
+			if (gApplication->isD3D12Initialized && gApplication->mDevice)
+			{
+				if (wParam == SIZE_MINIMIZED)
+				{
+					gApplication->mAppPaused = true;
+					gApplication->mMinimized = true;
+					gApplication->mMaximized = false;
+				}
+				else if (wParam == SIZE_MAXIMIZED)
+				{
+					gApplication->mAppPaused = false;
+					gApplication->mMinimized = false;
+					gApplication->mMaximized = true;
+					gApplication->OnResize();
+				}
+				else if (wParam == SIZE_RESTORED)
+				{
+
+					// Restoring from minimized state?
+					if (gApplication->mMinimized)
+					{
+						gApplication->mAppPaused = false;
+						gApplication->mMinimized = false;
+						gApplication->OnResize();
+					}
+
+					// Restoring from maximized state?
+					else if (gApplication->mMaximized)
+					{
+						gApplication->mAppPaused = false;
+						gApplication->mMaximized = false;
+						gApplication->OnResize();
+					}
+					else if (gApplication->mResizing)
+					{
+					}
+					else // API call such as SetWindowPos or mSwapChain->SetFullscreenState.
+					{
+						gApplication->OnResize();
+					}
+				}
+			}
+			return 0;
+
+		case WM_ENTERSIZEMOVE:
+			gApplication->mAppPaused = true;
+			gApplication->mResizing = true;
+			gApplication->mTimer.Stop();
+			return 0;
+
+		case WM_EXITSIZEMOVE:
+			gApplication->mAppPaused = false;
+			gApplication->mResizing = false;
+			gApplication->mTimer.Start();
+			gApplication->OnResize();
+			return 0;
+
+		case WM_DESTROY:
+			PostQuitMessage(0);
+			return 0;
+
+		case WM_MENUCHAR:
+			// Don't beep when we alt-enter.
+			return MAKELRESULT(0, MNC_CLOSE);
+
+			// Catch this message so to prevent the window from becoming too small.
+		case WM_GETMINMAXINFO:
+			((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
+			((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;
+			return 0;
+
+		case WM_LBUTTONDOWN:
+			gApplication->OnMouseDown(MK_LBUTTON, ((int)(short)LOWORD(lParam)), ((int)(short)HIWORD(lParam)));
+			return 0;
+		case WM_MBUTTONDOWN:
+			gApplication->OnMouseDown(MK_MBUTTON, ((int)(short)LOWORD(lParam)), ((int)(short)HIWORD(lParam)));
+			return 0;
+		case WM_RBUTTONDOWN:
+			gApplication->OnMouseDown(MK_RBUTTON, ((int)(short)LOWORD(lParam)), ((int)(short)HIWORD(lParam)));
+			return 0;
+		case WM_LBUTTONUP:
+			gApplication->OnMouseUp(MK_LBUTTON, ((int)(short)LOWORD(lParam)), ((int)(short)HIWORD(lParam)));
+			return 0;
+		case WM_MBUTTONUP:
+			gApplication->OnMouseUp(MK_MBUTTON, ((int)(short)LOWORD(lParam)), ((int)(short)HIWORD(lParam)));
+			return 0;
+		case WM_RBUTTONUP:
+			gApplication->OnMouseUp(MK_RBUTTON, ((int)(short)LOWORD(lParam)), ((int)(short)HIWORD(lParam)));
+			return 0;
+		case WM_MOUSEMOVE:
+			gApplication->OnMouseMove(wParam, ((int)(short)LOWORD(lParam)), ((int)(short)HIWORD(lParam)));
+			return 0;
+		case WM_MOUSEWHEEL:
+			//OnMouseScroll(0, GET_WHEEL_DELTA_WPARAM(wParam));
+			return 0;
+		case WM_MOUSEHWHEEL:
+			//OnMouseScroll(GET_WHEEL_DELTA_WPARAM(wParam), 0);
+			return 0;
+		case WM_KEYUP:
+			if (wParam == VK_ESCAPE)
+			{
+				PostQuitMessage(0);
+			}
+			else if ((int)wParam == VK_F11)
+			{
+				gApplication->SetFullscreen(!gApplication->mFullscreenState);
+			}
+			return 0;
+		}
+
+		return DefWindowProc(hwnd, msg, wParam, lParam);
+	}
 }

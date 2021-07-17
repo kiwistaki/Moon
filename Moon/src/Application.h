@@ -7,8 +7,7 @@
 #include "Mesh.h"
 #include "Math.h"
 #include "RenderDoc.h"
-
-struct SDL_Window;
+#include "Timer.h"
 
 namespace Moon
 {
@@ -68,8 +67,12 @@ namespace Moon
 		void Draw();
 		void Run();
 
+		static LRESULT MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 	private:
 		void DrawMesh();
+		void UpdateCamera(const Timer& timer);
+		void InitMainWindow();
 		void InitD3D12();
 		void InitCommandObjects();
 		void InitSwapchain();
@@ -90,9 +93,34 @@ namespace Moon
 			UINT64 byteSize,
 			Microsoft::WRL::ComPtr<ID3D12Resource>& uploadBuffer);
 
+		void SetFullscreen(bool fullscreen);
+		void OnMouseDown(WPARAM btnState, int x, int y);
+		void OnMouseUp(WPARAM btnState, int x, int y);
+		void OnMouseMove(WPARAM btnState, int x, int y);
+
 	private:
 		CommandQueueManager* mQueues;
 		RenderDoc* mRenderDoc;
+		Timer mTimer;
+		bool isD3D12Initialized = false;
+
+		//Win32 stuff
+		HINSTANCE		mhAppInst = nullptr; // application instance handle
+		HWND			mhMainWnd = nullptr; // main window handle
+		RECT			mRect;
+		bool			mRunning = true;
+		bool			mMinimized = false;
+		bool			mAppPaused = false;  // is the application paused?
+		bool			mMaximized = false;  // is the application maximized?
+		bool			mResizing = false;   // are the resize bars being dragged?
+		bool			mFullscreenState = false;// fullscreen enabled
+		int				mClientWidth = 1600;
+		int				mPreviousClientWidth = 1600;
+		int				mClientHeight = 900;
+		int				mPreviousClientHeight = 900;
+		bool			m4xMsaaState = false;
+		std::wstring	mMainWndCaption = L"Moon";
+		POINT			mLastMousePos;
 
 		//D3D12 related stuff
 		Microsoft::WRL::ComPtr<IDXGIFactory6> mFactory;
@@ -106,14 +134,10 @@ namespace Moon
 		Microsoft::WRL::ComPtr<ID3D12Resource> mDepthStencilBuffer;
 		DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 		DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-		SDL_Window* mWindow{ nullptr };
-		int mWidth = 1600;
-		int mHeight = 900;
-		bool m4xMsaaState = false;
 		UINT m4xMsaaQuality = 0;
 		D3D12_VIEWPORT mScreenViewport;
 		D3D12_RECT mScissorRect;
-
+		
 		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mCommandAllocator;
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList;
 		UINT64 mCurrentFence = 0;
