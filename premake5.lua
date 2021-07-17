@@ -66,7 +66,7 @@ project "Moon"
 		'{COPY} "../libs/sdl2/lib/x64/SDL2.dll" "%{cfg.targetdir}"',
 	}
 
-	filter "files:Moon/src/main.cpp or Moon/src/DirectXTex/**.cpp or files:Moon/src/D3D12MemoryAllocator/**.cpp"
+	filter "files:Moon/src/main.cpp or Moon/src/DirectXTex/**.cpp or files:Moon/src/D3D12MemoryAllocator/**.cpp or files:Moon/src/DDSTextureLoader.cpp"
    		flags { "NoPCH" }
 
 	filter "system:windows"

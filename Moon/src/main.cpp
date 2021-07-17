@@ -5,7 +5,7 @@ int main(int argc, char** argv)
 {
 	try
 	{
-		Application engine;
+		Moon::Application engine;
 		engine.Init();
 		engine.Run();
 		engine.Cleanup();

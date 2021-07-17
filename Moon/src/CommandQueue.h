@@ -3,16 +3,16 @@
 
 namespace Moon
 {
-    class Direct3DQueue
+    class CommandQueue
     {
     public:
-        Direct3DQueue(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE commandType);
-        ~Direct3DQueue();
+        CommandQueue(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE commandType);
+        ~CommandQueue();
 
         bool IsFenceComplete(uint64_t fenceValue);
         void InsertWait(uint64_t fenceValue);
-        void InsertWaitForQueueFence(Direct3DQueue* otherQueue, uint64_t fenceValue);
-        void InsertWaitForQueue(Direct3DQueue* otherQueue);
+        void InsertWaitForQueueFence(CommandQueue* otherQueue, uint64_t fenceValue);
+        void InsertWaitForQueue(CommandQueue* otherQueue);
 
         void WaitForFenceCPUBlocking(uint64_t fenceValue);
         void WaitForIdle();
@@ -39,25 +39,25 @@ namespace Moon
         HANDLE mFenceEventHandle;
     };
 
-    class Direct3DQueueManager
+    class CommandQueueManager
     {
     public:
-        Direct3DQueueManager(ID3D12Device* device);
-        ~Direct3DQueueManager();
+        CommandQueueManager(ID3D12Device* device);
+        ~CommandQueueManager();
 
-        Direct3DQueue* GetGraphicsQueue() { return mGraphicsQueue; }
-        Direct3DQueue* GetComputeQueue() { return mComputeQueue; }
-        Direct3DQueue* GetCopyQueue() { return mCopyQueue; }
+        CommandQueue* GetGraphicsQueue() { return mGraphicsQueue; }
+        CommandQueue* GetComputeQueue() { return mComputeQueue; }
+        CommandQueue* GetCopyQueue() { return mCopyQueue; }
 
-        Direct3DQueue* GetQueue(D3D12_COMMAND_LIST_TYPE commandType);
+        CommandQueue* GetQueue(D3D12_COMMAND_LIST_TYPE commandType);
 
         bool IsFenceComplete(uint64_t fenceValue);
         void WaitForFenceCPUBlocking(uint64_t fenceValue);
         void WaitForAllIdle();
 
     private:
-        Direct3DQueue* mGraphicsQueue;
-        Direct3DQueue* mComputeQueue;
-        Direct3DQueue* mCopyQueue;
+        CommandQueue* mGraphicsQueue;
+        CommandQueue* mComputeQueue;
+        CommandQueue* mCopyQueue;
     };
 }

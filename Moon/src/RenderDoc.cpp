@@ -31,7 +31,7 @@ namespace Moon
 				short result = getApi(eRENDERDOC_API_Version_1_4_0, (void**)&api);
 				if (result == 1)
 				{
-					//api->SetCaptureFilePathTemplate("RenderDoc/Moon");
+					api->SetCaptureFilePathTemplate("../RenderDoc/Moon");
 					//api->SetFocusToggleKeys(nullptr, 0);
 					//api->SetCaptureKeys(nullptr, 0);
 					mApi = api;

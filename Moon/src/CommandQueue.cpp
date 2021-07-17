@@ -3,7 +3,7 @@
 
 namespace Moon
 {
-    Direct3DQueue::Direct3DQueue(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE commandType)
+    CommandQueue::CommandQueue(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE commandType)
     {
         mQueueType = commandType;
         mCommandQueue = NULL;
@@ -26,7 +26,7 @@ namespace Moon
             throw std::runtime_error("Fence handle is invalid.");
     }
 
-    Direct3DQueue::~Direct3DQueue()
+    CommandQueue::~CommandQueue()
     {
         CloseHandle(mFenceEventHandle);
 
@@ -37,13 +37,13 @@ namespace Moon
         mCommandQueue = NULL;
     }
 
-    uint64_t Direct3DQueue::PollCurrentFenceValue()
+    uint64_t CommandQueue::PollCurrentFenceValue()
     {
         mLastCompletedFenceValue = std::max(mLastCompletedFenceValue, mFence->GetCompletedValue());
         return mLastCompletedFenceValue;
     }
 
-    bool Direct3DQueue::IsFenceComplete(uint64_t fenceValue)
+    bool CommandQueue::IsFenceComplete(uint64_t fenceValue)
     {
         if (fenceValue > mLastCompletedFenceValue)
         {
@@ -53,22 +53,22 @@ namespace Moon
         return fenceValue <= mLastCompletedFenceValue;
     }
 
-    void Direct3DQueue::InsertWait(uint64_t fenceValue)
+    void CommandQueue::InsertWait(uint64_t fenceValue)
     {
         mCommandQueue->Wait(mFence, fenceValue);
     }
 
-    void Direct3DQueue::InsertWaitForQueueFence(Direct3DQueue* otherQueue, uint64_t fenceValue)
+    void CommandQueue::InsertWaitForQueueFence(CommandQueue* otherQueue, uint64_t fenceValue)
     {
         mCommandQueue->Wait(otherQueue->GetFence(), fenceValue);
     }
 
-    void Direct3DQueue::InsertWaitForQueue(Direct3DQueue* otherQueue)
+    void CommandQueue::InsertWaitForQueue(CommandQueue* otherQueue)
     {
         mCommandQueue->Wait(otherQueue->GetFence(), otherQueue->GetNextFenceValue() - 1);
     }
 
-    void Direct3DQueue::WaitForFenceCPUBlocking(uint64_t fenceValue)
+    void CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue)
     {
         if (IsFenceComplete(fenceValue))
         {
@@ -84,14 +84,14 @@ namespace Moon
         }
     }
 
-    void Direct3DQueue::WaitForIdle()
+    void CommandQueue::WaitForIdle()
     {
         DX_CHECK(mCommandQueue->Signal(mFence, mNextFenceValue));
         mNextFenceValue++;
         WaitForFenceCPUBlocking(mNextFenceValue - 1);
     }
 
-    uint64_t Direct3DQueue::ExecuteCommandList(ID3D12CommandList* commandList)
+    uint64_t CommandQueue::ExecuteCommandList(ID3D12CommandList* commandList)
     {
         DX_CHECK(((ID3D12GraphicsCommandList*)commandList)->Close());
         mCommandQueue->ExecuteCommandLists(1, &commandList);
@@ -103,21 +103,21 @@ namespace Moon
         return mNextFenceValue++;
     }
 
-    Direct3DQueueManager::Direct3DQueueManager(ID3D12Device* device)
+    CommandQueueManager::CommandQueueManager(ID3D12Device* device)
     {
-        mGraphicsQueue = new Direct3DQueue(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-        mComputeQueue = new Direct3DQueue(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-        mCopyQueue = new Direct3DQueue(device, D3D12_COMMAND_LIST_TYPE_COPY);
+        mGraphicsQueue = new CommandQueue(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+        mComputeQueue = new CommandQueue(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+        mCopyQueue = new CommandQueue(device, D3D12_COMMAND_LIST_TYPE_COPY);
     }
 
-    Direct3DQueueManager::~Direct3DQueueManager()
+    CommandQueueManager::~CommandQueueManager()
     {
         delete mGraphicsQueue;
         delete mComputeQueue;
         delete mCopyQueue;
     }
 
-    Direct3DQueue* Direct3DQueueManager::GetQueue(D3D12_COMMAND_LIST_TYPE commandType)
+    CommandQueue* CommandQueueManager::GetQueue(D3D12_COMMAND_LIST_TYPE commandType)
     {
         switch (commandType)
         {
@@ -134,18 +134,18 @@ namespace Moon
         return NULL;
     }
 
-    bool Direct3DQueueManager::IsFenceComplete(uint64_t fenceValue)
+    bool CommandQueueManager::IsFenceComplete(uint64_t fenceValue)
     {
         return GetQueue((D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56))->IsFenceComplete(fenceValue);
     }
 
-    void Direct3DQueueManager::WaitForFenceCPUBlocking(uint64_t fenceValue)
+    void CommandQueueManager::WaitForFenceCPUBlocking(uint64_t fenceValue)
     {
-        Direct3DQueue* commandQueue = GetQueue((D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56));
+        CommandQueue* commandQueue = GetQueue((D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56));
         commandQueue->WaitForFenceCPUBlocking(fenceValue);
     }
 
-    void Direct3DQueueManager::WaitForAllIdle()
+    void CommandQueueManager::WaitForAllIdle()
     {
         mGraphicsQueue->WaitForIdle();
         mComputeQueue->WaitForIdle();
