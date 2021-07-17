@@ -34,7 +34,7 @@ namespace Moon
 		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(mCommandList.Get());
 
 		mCamera = new Camera(static_cast<float>(mClientWidth), static_cast<float>(mClientHeight));
-		mCamera->SetPosition(0.0f, 2.0f, 0.0f);
+		mCamera->SetPosition(-5.0f, 12.0f, 2.0f);
 
 		isD3D12Initialized = true;
 	}

@@ -9,15 +9,12 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 IncludeDir = {}
 IncludeDir["assimp"] = "libs/assimp/include"
-IncludeDir["glm"] = "libs/glm/"
 IncludeDir["imgui"] = "libs/imgui/"
 IncludeDir["RenderDoc"] = "libs/RenderDoc/"
-IncludeDir["sdl2"] = "libs/sdl2/include"
 IncludeDir["tinyobjloader"] = "libs/tinyobjloader/"
 
 LibraryDir = {}
 LibraryDir["assimp"] = "../libs/assimp/bin/Release/assimp-vc142-mt.lib"
-LibraryDir["sdl2"] = "../libs/sdl2/lib/x64/sdl2.lib"
 
 project "Moon"
 	location "Moon"
@@ -47,23 +44,19 @@ project "Moon"
 	{
 		"%{prj.name}/",
 		"%{IncludeDir.assimp}",
-		"%{IncludeDir.glm}",
 		"%{IncludeDir.imgui}",
 		"%{IncludeDir.RenderDoc}",
-		"%{IncludeDir.sdl2}",
 		"%{IncludeDir.tinyobjloader}",
 	}
 
 	links 
 	{
 		"%{LibraryDir.assimp}",
-		"%{LibraryDir.sdl2}",
 	}
 
 	postbuildcommands 
 	{
 		'{COPY} "../libs/assimp/bin/Release/assimp-vc142-mt.dll" "%{cfg.targetdir}"',
-		'{COPY} "../libs/sdl2/lib/x64/SDL2.dll" "%{cfg.targetdir}"',
 	}
 
 	filter "files:Moon/src/main.cpp or Moon/src/DirectXTex/**.cpp or files:Moon/src/D3D12MemoryAllocator/**.cpp or files:Moon/src/DDSTextureLoader.cpp"
