@@ -2,6 +2,7 @@
 #include "Application.h"
 
 #include "DDSTextureLoader.h"
+
 #include <iostream>
 #include <fstream>
 
@@ -18,7 +19,7 @@ namespace Moon
 
 		InitMainWindow();
 
-		mRenderDoc = new Moon::RenderDoc();
+		mRenderDoc = new RenderDoc();
 
 		InitD3D12();
 		InitCommandObjects();
@@ -36,6 +37,8 @@ namespace Moon
 		mCamera = new Camera(static_cast<float>(mClientWidth), static_cast<float>(mClientHeight));
 		mCamera->SetPosition(-5.0f, 12.0f, 2.0f);
 
+		mImguiDrawer = new ImguiDrawer(mhMainWnd, mDevice, mBackBufferFormat);
+
 		isD3D12Initialized = true;
 	}
 
@@ -43,7 +46,7 @@ namespace Moon
 	{
 		mQueues->GetGraphicsQueue()->WaitForIdle();
 		delete mQueues;
-
+		delete mImguiDrawer;
 		delete mCamera;
 
 		if (mRenderDoc)
@@ -90,7 +93,7 @@ namespace Moon
 
 		//BeginFrame
 		DX_CHECK(mCommandAllocator->Reset());
-		DX_CHECK(mCommandList->Reset(mCommandAllocator.Get(), nullptr/*mPSO.Get()*/));
+		DX_CHECK(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
 
 		mCurrFrameResource = mFrameResources[mCurrBackBuffer].get();
 
@@ -149,6 +152,12 @@ namespace Moon
 		RENDER_PASS("Mesh")
 		{
 			DrawMesh();
+		}
+
+		//DrawImGui
+		RENDER_PASS("Imgui")
+		{
+			mImguiDrawer->DrawImgui(mCommandList, mClientWidth, mClientHeight);
 		}
 
 		//EndFrame

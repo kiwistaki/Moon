@@ -8,6 +8,7 @@
 #include "Math.h"
 #include "RenderDoc.h"
 #include "Timer.h"
+#include "ImguiDrawer.h"
 
 namespace Moon
 {
@@ -99,10 +100,11 @@ namespace Moon
 		void OnMouseMove(WPARAM btnState, int x, int y);
 
 	private:
-		CommandQueueManager* mQueues;
-		RenderDoc* mRenderDoc;
+		CommandQueueManager* mQueues = nullptr;
+		RenderDoc* mRenderDoc = nullptr;
 		Timer mTimer;
 		bool isD3D12Initialized = false;
+		ImguiDrawer* mImguiDrawer = nullptr;
 
 		//Win32 stuff
 		HINSTANCE		mhAppInst = nullptr; // application instance handle

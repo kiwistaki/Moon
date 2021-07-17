@@ -16,6 +16,10 @@ IncludeDir["tinyobjloader"] = "libs/tinyobjloader/"
 LibraryDir = {}
 LibraryDir["assimp"] = "../libs/assimp/bin/Release/assimp-vc142-mt.lib"
 
+group "Dependencies"
+	include "libs/imgui"
+group ""
+
 project "Moon"
 	location "Moon"
 	kind "ConsoleApp"
@@ -52,6 +56,7 @@ project "Moon"
 	links 
 	{
 		"%{LibraryDir.assimp}",
+		"ImGui",
 	}
 
 	postbuildcommands 
