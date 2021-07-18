@@ -154,7 +154,9 @@ namespace Moon
 		//DrawImGui
 		RENDER_PASS("Imgui")
 		{
-			mImguiDrawer->DrawImgui(mCommandList, mClientWidth, mClientHeight);
+			mImguiDrawer->BeginDrawImgui(mCommandList, mClientWidth, mClientHeight);
+			DrawMenuBar();
+			mImguiDrawer->EndDrawImgui(mCommandList);
 		}
 
 		//EndFrame
@@ -849,6 +851,30 @@ namespace Moon
 
 		Resize();
 		return false;
+	}
+
+	void Application::DrawMenuBar()
+	{
+		if (ImGui::BeginMainMenuBar())
+		{
+			if (ImGui::BeginMenu("File"))
+			{
+				//if (ImGui::MenuItem("New")) {}
+				//if (ImGui::MenuItem("Open", "Ctrl+O")) {}
+				if (ImGui::MenuItem("Close", "ESC"))
+				{
+					PostQuitMessage(0);
+				}
+				ImGui::EndMenu();
+			}
+			if (ImGui::BeginMenu("View"))
+			{
+				ImGui::MenuItem("Show ImGui Demo", "", &showImguiDemo);
+				ImGui::MenuItem("Wireframe View", "F1", &mWireframeRendering);
+				ImGui::EndMenu();
+			}
+			ImGui::EndMainMenuBar();
+		}
 	}
 
 	void Application::OnEvent(Event& e)

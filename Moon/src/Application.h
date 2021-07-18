@@ -106,12 +106,15 @@ namespace Moon
 		void OnResize();
 		bool OnWindowResize(WindowResizeEvent& e);
 
+		void DrawMenuBar();
+
 	private:
 		CommandQueueManager* mQueues = nullptr;
 		RenderDoc* mRenderDoc = nullptr;
 		Timer mTimer;
 		bool isD3D12Initialized = false;
 		ImguiDrawer* mImguiDrawer = nullptr;
+		bool showImguiDemo = false;
 
 		//Win32 stuff
 		HINSTANCE		mhAppInst = nullptr; // application instance handle

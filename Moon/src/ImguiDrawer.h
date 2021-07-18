@@ -1,6 +1,7 @@
 #pragma once
 #include "dx_utils.h"
 #include "Event.h"
+#include <imgui.h>
 
 namespace Moon
 {
@@ -11,7 +12,8 @@ namespace Moon
 		~ImguiDrawer();
 
 		void DrawMenuBar();
-		void DrawImgui(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList, int width, int height);
+		void BeginDrawImgui(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList, int width, int height);
+		void EndDrawImgui(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList);
 		void OnEvent(Event& e);
 
 	private:
@@ -24,6 +26,5 @@ namespace Moon
 
 	private:
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mImguiHeap;
-		bool showDemo = false;
 	};
 }

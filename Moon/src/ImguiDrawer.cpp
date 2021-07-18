@@ -1,6 +1,6 @@
 #include "mnpch.h"
 #include "ImguiDrawer.h"
-#include <imgui.h>
+
 #include <examples/imgui_impl_dx12.h>
 #include <examples/imgui_impl_dx12.cpp>
 #include <examples/imgui_impl_win32.h>
@@ -96,27 +96,8 @@ namespace Moon
         ImGui::DestroyContext();
 	}
 
-    void ImguiDrawer::DrawMenuBar()
+    void ImguiDrawer::BeginDrawImgui(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList, int width, int height)
     {
-        if (ImGui::BeginMainMenuBar())
-        {
-            if (ImGui::BeginMenu("File"))
-            {
-                //if (ImGui::MenuItem("New")) {}
-                //if (ImGui::MenuItem("Open", "Ctrl+O")) {}
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("View"))
-            {
-                ImGui::MenuItem("Show ImGui Demo", "", &showDemo);
-                ImGui::EndMenu();
-            }
-            ImGui::EndMainMenuBar();
-        }
-    }
-
-    void ImguiDrawer::DrawImgui(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList, int width, int height)
-	{
         ImGui_ImplDX12_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
@@ -124,18 +105,15 @@ namespace Moon
         ImGuiIO& io = ImGui::GetIO();
         io.DisplaySize = ImVec2((float)width, (float)height);
 
-        //Actual imgui drawing
-        {
-            if (showDemo)
-                ImGui::ShowDemoWindow(&showDemo);
+    }
 
-            DrawMenuBar();
-        }
-
+    void ImguiDrawer::EndDrawImgui(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList)
+    {
         // Rendering
         ImGui::Render();
 
         // Update and Render additional Platform Windows
+        ImGuiIO& io = ImGui::GetIO();
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {
             ImGui::UpdatePlatformWindows();

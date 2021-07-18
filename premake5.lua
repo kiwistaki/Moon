@@ -10,6 +10,7 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 IncludeDir = {}
 IncludeDir["assimp"] = "libs/assimp/include"
 IncludeDir["imgui"] = "libs/imgui/"
+IncludeDir["pix"] = "libs/pix/"
 IncludeDir["RenderDoc"] = "libs/RenderDoc/"
 IncludeDir["tinyobjloader"] = "libs/tinyobjloader/"
 
@@ -49,6 +50,7 @@ project "Moon"
 		"%{prj.name}/",
 		"%{IncludeDir.assimp}",
 		"%{IncludeDir.imgui}",
+		"%{IncludeDir.pix}",
 		"%{IncludeDir.RenderDoc}",
 		"%{IncludeDir.tinyobjloader}",
 	}
