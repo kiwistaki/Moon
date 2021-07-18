@@ -8,6 +8,7 @@
 #include "Math.h"
 #include "RenderDoc.h"
 #include "Timer.h"
+#include "Event.h"
 #include "ImguiDrawer.h"
 
 namespace Moon
@@ -68,17 +69,17 @@ namespace Moon
 		void Draw();
 		void Run();
 
+		void OnEvent(Event& e);
 		static LRESULT MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 	private:
 		void DrawMesh();
-		void UpdateCamera(const Timer& timer);
 		void InitMainWindow();
 		void InitD3D12();
 		void InitCommandObjects();
 		void InitSwapchain();
 		void InitDescriptorHeaps();
-		void OnResize();
+		void Resize();
 
 		void InitPipeline();
 		void LoadImages();
@@ -98,6 +99,11 @@ namespace Moon
 		void OnMouseDown(WPARAM btnState, int x, int y);
 		void OnMouseUp(WPARAM btnState, int x, int y);
 		void OnMouseMove(WPARAM btnState, int x, int y);
+		void OnMouseScroll(short x, short y);
+		void OnKeyUp(const WPARAM key);
+		void OnKeyDown(const WPARAM key, const uint16_t repeatCount);
+		void OnResize();
+		bool OnWindowResize(WindowResizeEvent& e);
 
 	private:
 		CommandQueueManager* mQueues = nullptr;
@@ -122,7 +128,6 @@ namespace Moon
 		int				mPreviousClientHeight = 900;
 		bool			m4xMsaaState = false;
 		std::wstring	mMainWndCaption = L"Moon";
-		POINT			mLastMousePos;
 
 		//D3D12 related stuff
 		Microsoft::WRL::ComPtr<IDXGIFactory6> mFactory;

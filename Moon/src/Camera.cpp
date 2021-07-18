@@ -264,4 +264,67 @@ namespace Moon
 			mViewDirty = false;
 		}
 	}
+
+	void Camera::Update(float dt)
+	{
+		float movementSpeed = mMovementSpeed;
+
+		if (GetAsyncKeyState(VK_LSHIFT) & 0x8000)
+			movementSpeed *= 5;
+
+		if (GetAsyncKeyState('W') & 0x8000)
+			Walk(movementSpeed * dt);
+
+		if (GetAsyncKeyState('S') & 0x8000)
+			Walk(-movementSpeed * dt);
+
+		if (GetAsyncKeyState('A') & 0x8000)
+			Strafe(-movementSpeed * dt);
+
+		if (GetAsyncKeyState('D') & 0x8000)
+			Strafe(movementSpeed * dt);
+
+		UpdateViewMatrix();
+	}
+
+	void Camera::OnEvent(Event& e)
+	{
+		EventDispatcher dispatcher(e);
+		dispatcher.Dispatch<MouseButtonPressedEvent>(MN_BIND_EVENT_FN(Camera::OnMouseButtonPressedEvent));
+		dispatcher.Dispatch<MouseButtonReleasedEvent>(MN_BIND_EVENT_FN(Camera::OnMouseButtonReleasedEvent));
+		dispatcher.Dispatch<MouseMovedEvent>(MN_BIND_EVENT_FN(Camera::OnMouseMovedEvent));
+		dispatcher.Dispatch<MouseScrolledEvent>(MN_BIND_EVENT_FN(Camera::OnMouseScrolledEvent));
+	}
+
+	bool Camera::OnMouseButtonPressedEvent(MouseButtonPressedEvent& e)
+	{
+		mLastMousePos.x = e.GetX();
+		mLastMousePos.y = e.GetY();
+		return false;
+	}
+
+	bool Camera::OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e)
+	{
+		return false;
+	}
+
+	bool Camera::OnMouseMovedEvent(MouseMovedEvent& e)
+	{
+		if ((e.GetBtnState() & MK_LBUTTON) != 0)
+		{
+			float dx = DirectX::XMConvertToRadians(0.25f * static_cast<float>(e.GetX() - mLastMousePos.x));
+			float dy = DirectX::XMConvertToRadians(0.25f * static_cast<float>(e.GetY() - mLastMousePos.y));
+
+			Pitch(dy);
+			RotateY(dx);
+		}
+		mLastMousePos.x = static_cast<LONG>(e.GetX());
+		mLastMousePos.y = static_cast<LONG>(e.GetY());
+		return false;
+	}
+
+	bool Camera::OnMouseScrolledEvent(MouseScrolledEvent& e)
+	{
+		return false;
+	}
 }

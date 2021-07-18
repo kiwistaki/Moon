@@ -19,3 +19,5 @@
 #include <vector>
 
 #include <Windows.h>
+
+#define MN_BIND_EVENT_FN(x) [this](auto&&... args) -> decltype(auto) { return this->x(std::forward<decltype(args)>(args)...); }

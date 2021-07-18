@@ -1,5 +1,6 @@
 #pragma once
 #include "Math.h"
+#include "Event.h"
 
 namespace Moon
 {
@@ -46,6 +47,19 @@ namespace Moon
 		void Pitch(float angle);
 		void RotateY(float angle);
 		void UpdateViewMatrix();
+		void Update(float dt);
+
+		void OnEvent(Event& e);
+
+	private:
+		bool OnMouseButtonPressedEvent(MouseButtonPressedEvent& e);
+		bool OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e);
+		bool OnMouseMovedEvent(MouseMovedEvent& e);
+		bool OnMouseScrolledEvent(MouseScrolledEvent& e);
+
+		POINT mLastMousePos;
+		float mMovementSpeed = 10.0f;
+		float dt = 0.0f;
 
 	private:
 		DirectX::XMFLOAT3 mPosition = { 0.0f, 0.0f, 0.0f };

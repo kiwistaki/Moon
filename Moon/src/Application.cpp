@@ -25,7 +25,7 @@ namespace Moon
 		InitCommandObjects();
 		InitSwapchain();
 		InitDescriptorHeaps();
-		OnResize();
+		Resize();
 
 		DX_CHECK(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
 		InitPipeline();
@@ -73,7 +73,7 @@ namespace Moon
 				mTimer.Tick();
 				if (!mAppPaused)
 				{
-					UpdateCamera(mTimer);
+					mCamera->Update(mTimer.DeltaTime());
 					Draw();
 				}
 				else
@@ -202,29 +202,6 @@ namespace Moon
 			mCommandList->SetGraphicsRootConstantBufferView(1, objCBAddress);
 			mCommandList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 		}
-	}
-
-	void Application::UpdateCamera(const Timer& timer)
-	{
-		const float dt = timer.DeltaTime();
-		float movementSpeed = 10.0f;
-
-		if (GetAsyncKeyState(VK_LSHIFT) & 0x8000)
-			movementSpeed *= 5;
-
-		if (GetAsyncKeyState('W') & 0x8000)
-			mCamera->Walk(movementSpeed * dt);
-
-		if (GetAsyncKeyState('S') & 0x8000)
-			mCamera->Walk(-movementSpeed * dt);
-
-		if (GetAsyncKeyState('A') & 0x8000)
-			mCamera->Strafe(-movementSpeed * dt);
-
-		if (GetAsyncKeyState('D') & 0x8000)
-			mCamera->Strafe(movementSpeed * dt);
-
-		mCamera->UpdateViewMatrix();
 	}
 
 	void Application::InitMainWindow()
@@ -396,7 +373,7 @@ namespace Moon
 		DX_CHECK(mDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvHeap)));
 	}
 
-	void Application::OnResize()
+	void Application::Resize()
 	{
 		assert(mDevice);
 		assert(mSwapchain);
@@ -814,26 +791,67 @@ namespace Moon
 
 	void Application::OnMouseDown(WPARAM btnState, int x, int y)
 	{
-		mLastMousePos.x = x;
-		mLastMousePos.y = y;
+		MouseButtonPressedEvent e(btnState, x, y);
+		OnEvent(e);
 	}
 
 	void Application::OnMouseUp(WPARAM btnState, int x, int y)
 	{
+		MouseButtonReleasedEvent e(btnState, x, y);
+		OnEvent(e);
 	}
 
 	void Application::OnMouseMove(WPARAM btnState, int x, int y)
 	{
-		if ((btnState & MK_LBUTTON) != 0)
-		{
-			float dx = DirectX::XMConvertToRadians(0.25f * static_cast<float>(x - mLastMousePos.x));
-			float dy = DirectX::XMConvertToRadians(0.25f * static_cast<float>(y - mLastMousePos.y));
+		MouseMovedEvent event(btnState, x, y);
+		OnEvent(event);
+	}
 
-			mCamera->Pitch(dy);
-			mCamera->RotateY(dx);
+	void Application::OnMouseScroll(short x, short y)
+	{
+		MouseScrolledEvent event((const float)x, (const float)y);
+		OnEvent(event);
+	}
+
+	void Application::OnKeyUp(const WPARAM key)
+	{
+		KeyReleasedEvent event(key);
+		OnEvent(event);
+	}
+
+	void Application::OnKeyDown(const WPARAM key, const uint16_t repeatCount)
+	{
+		KeyPressedEvent event(key, repeatCount);
+		OnEvent(event);
+	}
+
+	void Application::OnResize()
+	{
+		WindowResizeEvent event(mClientWidth, mClientHeight);
+		OnEvent(event);
+	}
+
+	bool Application::OnWindowResize(WindowResizeEvent& e)
+	{
+		int width = e.GetWidth(), height = e.GetHeight();
+		if (width == 0 || height == 0)
+		{
+			mMinimized = true;
+			return false;
 		}
-		mLastMousePos.x = static_cast<LONG>(x);
-		mLastMousePos.y = static_cast<LONG>(y);
+		mMinimized = false;
+
+		Resize();
+		return false;
+	}
+
+	void Application::OnEvent(Event& e)
+	{
+		EventDispatcher dispatcher(e);
+		dispatcher.Dispatch<WindowResizeEvent>(MN_BIND_EVENT_FN(Application::OnWindowResize));
+
+		if (!e.mHandled) mImguiDrawer->OnEvent(e);
+		if (!e.mHandled) mCamera->OnEvent(e);
 	}
 
 	LRESULT Application::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -922,8 +940,8 @@ namespace Moon
 			// Don't beep when we alt-enter.
 			return MAKELRESULT(0, MNC_CLOSE);
 
-			// Catch this message so to prevent the window from becoming too small.
 		case WM_GETMINMAXINFO:
+			// Catch this message so to prevent the window from becoming too small.
 			((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
 			((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;
 			return 0;
@@ -950,10 +968,10 @@ namespace Moon
 			gApplication->OnMouseMove(wParam, ((int)(short)LOWORD(lParam)), ((int)(short)HIWORD(lParam)));
 			return 0;
 		case WM_MOUSEWHEEL:
-			//OnMouseScroll(0, GET_WHEEL_DELTA_WPARAM(wParam));
+			gApplication->OnMouseScroll(0, GET_WHEEL_DELTA_WPARAM(wParam));
 			return 0;
 		case WM_MOUSEHWHEEL:
-			//OnMouseScroll(GET_WHEEL_DELTA_WPARAM(wParam), 0);
+			gApplication->OnMouseScroll(GET_WHEEL_DELTA_WPARAM(wParam), 0);
 			return 0;
 		case WM_KEYUP:
 			if (wParam == VK_ESCAPE)
@@ -964,6 +982,10 @@ namespace Moon
 			{
 				gApplication->SetFullscreen(!gApplication->mFullscreenState);
 			}
+			gApplication->OnKeyUp(wParam);
+			return 0;
+		case WM_KEYDOWN:
+			gApplication->OnKeyDown(wParam, 0);
 			return 0;
 		}
 

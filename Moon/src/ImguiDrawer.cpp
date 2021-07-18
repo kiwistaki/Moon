@@ -107,7 +107,7 @@ namespace Moon
 
         //Actual imgui drawing
         {
-            static bool showDemo = false;
+            static bool showDemo = true;
             if (showDemo)
                 ImGui::ShowDemoWindow(&showDemo);
         }
@@ -126,4 +126,86 @@ namespace Moon
 		cmdList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmdList.Get());
 	}
+
+    void ImguiDrawer::OnEvent(Event& e)
+    {
+        EventDispatcher dispatcher(e);
+        dispatcher.Dispatch<MouseButtonPressedEvent>(MN_BIND_EVENT_FN(ImguiDrawer::OnMouseButtonPressedEvent));
+        dispatcher.Dispatch<MouseButtonReleasedEvent>(MN_BIND_EVENT_FN(ImguiDrawer::OnMouseButtonReleasedEvent));
+        dispatcher.Dispatch<MouseMovedEvent>(MN_BIND_EVENT_FN(ImguiDrawer::OnMouseMovedEvent));
+        dispatcher.Dispatch<MouseScrolledEvent>(MN_BIND_EVENT_FN(ImguiDrawer::OnMouseScrolledEvent));
+        dispatcher.Dispatch<KeyPressedEvent>(MN_BIND_EVENT_FN(ImguiDrawer::OnKeyPressedEvent));
+        dispatcher.Dispatch<KeyReleasedEvent>(MN_BIND_EVENT_FN(ImguiDrawer::OnKeyReleasedEvent));
+    }
+
+    bool ImguiDrawer::OnMouseButtonPressedEvent(MouseButtonPressedEvent& e)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse)
+        {
+            io.MouseDown[e.GetBtnState() - 1] = true;
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool ImguiDrawer::OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.MouseDown[e.GetBtnState() - 1] = false;
+
+        return false;
+    }
+
+    bool ImguiDrawer::OnMouseMovedEvent(MouseMovedEvent& e)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse)
+        {
+            io.MousePos = ImVec2((float)e.GetX(), (float)e.GetY());
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool ImguiDrawer::OnMouseScrolledEvent(MouseScrolledEvent& e)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse)
+        {
+            io.MouseWheelH += e.GetXOffset() / 120.0f;
+            io.MouseWheel += e.GetYOffset() / 120.0f;
+            return true;
+        }
+        return false;
+    }
+
+    bool ImguiDrawer::OnKeyPressedEvent(KeyPressedEvent& e)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.KeysDown[e.GetKey()] = true;
+
+        io.KeyCtrl = GetAsyncKeyState(VK_LCONTROL) & 0x8000;
+        io.KeyShift = GetAsyncKeyState(VK_LSHIFT) & 0x8000;
+        io.KeyAlt = GetAsyncKeyState(VK_LMENU) & 0x8000;
+        io.KeySuper = false;
+
+        if (io.WantTextInput)
+        {
+            io.AddInputCharacterUTF16((unsigned short)e.GetKey());
+            return true;
+        }
+
+        return false;
+    }
+
+    bool ImguiDrawer::OnKeyReleasedEvent(KeyReleasedEvent& e)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.KeysDown[e.GetKey()] = false;
+
+        return false;
+    }
 }
