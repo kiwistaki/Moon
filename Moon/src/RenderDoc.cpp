@@ -9,8 +9,6 @@ namespace Moon
 	RenderDoc::RenderDoc()
 		:mModule(nullptr)
 		,mApi(nullptr)
-		,mNumCaptures(0)
-		,mRequestCapture(false)
 	{
 		Init();
 	}
@@ -32,8 +30,9 @@ namespace Moon
 				if (result == 1)
 				{
 					api->SetCaptureFilePathTemplate("../RenderDoc/Moon");
-					//api->SetFocusToggleKeys(nullptr, 0);
-					//api->SetCaptureKeys(nullptr, 0);
+					// Hide Overlay
+					api->MaskOverlayBits(RENDERDOC_OverlayBits::eRENDERDOC_Overlay_None, RENDERDOC_OverlayBits::eRENDERDOC_Overlay_None);
+
 					mApi = api;
 				}
 			}
@@ -45,41 +44,5 @@ namespace Moon
 		::FreeLibrary(mModule);
 		mModule = nullptr;
 		mApi = nullptr;
-	}
-
-	void RenderDoc::Begin()
-	{
-		if (mRequestCapture)
-		{
-			mRequestCapture = false;
-			if (mApi)
-			{
-				auto api = static_cast<RENDERDOC_API_1_4_0*>(mApi);
-				if (api->IsFrameCapturing() == 0)
-				{
-					mNumCaptures = api->GetNumCaptures();
-					api->TriggerCapture();
-					//MN_ENGINE_INFO("[RenderDoc] Capturing...");
-				}
-			}
-		}
-	}
-
-	void RenderDoc::End()
-	{
-		if (mApi)
-		{
-			auto api = static_cast<RENDERDOC_API_1_4_0*>(mApi);
-			short num = api->GetNumCaptures();
-			if (num > mNumCaptures)
-			{
-				unsigned int pathSize = 255;
-				char path[255];
-				api->GetCapture(num - 1, path, &pathSize, nullptr);
-				//MN_ENGINE_INFO("[RenderDoc] Capture taken.");
-				mNumCaptures = num;
-				::ShellExecuteA(nullptr, nullptr, path, nullptr, nullptr, SW_SHOWNORMAL);
-			}
-		}
 	}
 }

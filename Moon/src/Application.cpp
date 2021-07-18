@@ -86,9 +86,6 @@ namespace Moon
 
 	void Application::Draw()
 	{
-		if (mRenderDoc)
-			mRenderDoc->Begin();
-
 		mQueues->GetGraphicsQueue()->WaitForFenceCPUBlocking(mCurrentFence);
 
 		//BeginFrame
@@ -169,9 +166,6 @@ namespace Moon
 		// swap the back and front buffers
 		DX_CHECK(mSwapchain->Present(1, 0));
 		mCurrBackBuffer = (mCurrBackBuffer + 1) % BACKBUFFER_COUNT;
-
-		if (mRenderDoc)
-			mRenderDoc->End();
 	}
 
 	void Application::DrawMesh()

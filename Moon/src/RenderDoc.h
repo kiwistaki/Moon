@@ -12,13 +12,8 @@ namespace Moon
 		void Init();
 		void Deinit();
 
-		void Begin();
-		void End();
-
 	private:
 		HMODULE mModule = nullptr;
 		void* mApi = nullptr;
-		short mNumCaptures = 0;
-		bool mRequestCapture = false;
 	};
 }
