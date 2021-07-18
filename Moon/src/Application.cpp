@@ -170,7 +170,7 @@ namespace Moon
 
 	void Application::DrawMesh()
 	{
-		mCommandList->SetPipelineState(mMeshPSO.Get());
+		mCommandList->SetPipelineState(mWireframeRendering ? mWireframeMeshPSO.Get() : mMeshPSO.Get());
 		ID3D12DescriptorHeap* descriptorHeaps[] = { mSrvHeap.Get() };
 		mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 		mCommandList->SetGraphicsRootSignature(mMeshRootSig.Get());
@@ -524,6 +524,9 @@ namespace Moon
 		meshPsoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
 		meshPsoDesc.DSVFormat = mDepthStencilFormat;
 		DX_CHECK(mDevice->CreateGraphicsPipelineState(&meshPsoDesc, IID_PPV_ARGS(&mMeshPSO)));
+
+		meshPsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+		DX_CHECK(mDevice->CreateGraphicsPipelineState(&meshPsoDesc, IID_PPV_ARGS(&mWireframeMeshPSO)));
 	}
 
 	void Application::LoadImages()
@@ -984,6 +987,10 @@ namespace Moon
 			else if ((int)wParam == VK_F11)
 			{
 				gApplication->SetFullscreen(!gApplication->mFullscreenState);
+			}
+			else if ((int)wParam == VK_F1)
+			{
+				gApplication->ToggleWireframeRendering();
 			}
 			gApplication->OnKeyUp(wParam);
 			return 0;

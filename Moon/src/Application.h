@@ -96,6 +96,7 @@ namespace Moon
 			Microsoft::WRL::ComPtr<ID3D12Resource>& uploadBuffer);
 
 		void SetFullscreen(bool fullscreen);
+		void ToggleWireframeRendering() { mWireframeRendering = !mWireframeRendering; }
 		void OnMouseDown(WPARAM btnState, int x, int y);
 		void OnMouseUp(WPARAM btnState, int x, int y);
 		void OnMouseMove(WPARAM btnState, int x, int y);
@@ -128,6 +129,7 @@ namespace Moon
 		int				mPreviousClientHeight = 900;
 		bool			m4xMsaaState = false;
 		std::wstring	mMainWndCaption = L"Moon";
+		bool			mWireframeRendering = false;
 
 		//D3D12 related stuff
 		Microsoft::WRL::ComPtr<IDXGIFactory6> mFactory;
@@ -158,6 +160,7 @@ namespace Moon
 
 		Microsoft::WRL::ComPtr<ID3D12RootSignature> mMeshRootSig;
 		Microsoft::WRL::ComPtr<ID3D12PipelineState> mMeshPSO;
+		Microsoft::WRL::ComPtr<ID3D12PipelineState> mWireframeMeshPSO;
 
 		Camera* mCamera = nullptr;
 		std::unordered_map<std::string, std::unique_ptr<MeshGeometry>> mGeometries;
