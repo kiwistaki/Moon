@@ -206,7 +206,16 @@ namespace Moon
 		wc.cbClsExtra = 0;
 		wc.cbWndExtra = 0;
 		wc.hInstance = mhAppInst;
-		wc.hIcon = LoadIcon(0, IDI_APPLICATION);
+		wc.hIcon = (HICON)LoadImage(
+			NULL,
+			L"../assets/icon/icon.ico",
+			IMAGE_ICON,
+			0,
+			0,
+			LR_LOADFROMFILE |
+			LR_DEFAULTSIZE |
+			LR_SHARED 
+		);
 		wc.hCursor = LoadCursor(0, IDC_ARROW);
 		wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
 		wc.lpszMenuName = 0;

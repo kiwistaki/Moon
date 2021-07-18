@@ -96,7 +96,26 @@ namespace Moon
         ImGui::DestroyContext();
 	}
 
-	void ImguiDrawer::DrawImgui(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList, int width, int height)
+    void ImguiDrawer::DrawMenuBar()
+    {
+        if (ImGui::BeginMainMenuBar())
+        {
+            if (ImGui::BeginMenu("File"))
+            {
+                //if (ImGui::MenuItem("New")) {}
+                //if (ImGui::MenuItem("Open", "Ctrl+O")) {}
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("View"))
+            {
+                ImGui::MenuItem("Show ImGui Demo", "", &showDemo);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+    }
+
+    void ImguiDrawer::DrawImgui(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmdList, int width, int height)
 	{
         ImGui_ImplDX12_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -107,9 +126,10 @@ namespace Moon
 
         //Actual imgui drawing
         {
-            static bool showDemo = true;
             if (showDemo)
                 ImGui::ShowDemoWindow(&showDemo);
+
+            DrawMenuBar();
         }
 
         // Rendering
