@@ -77,6 +77,7 @@ namespace Moon
 		void InitMainWindow();
 		void InitD3D12();
 		void InitCommandObjects();
+		void InitQuery();
 		void InitSwapchain();
 		void InitDescriptorHeaps();
 		void Resize();
@@ -85,6 +86,9 @@ namespace Moon
 		void LoadImages();
 		void LoadMeshes();
 		void InitScene();
+
+
+		void GetQueryResult();
 
 		std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
 		Microsoft::WRL::ComPtr<ID3DBlob> LoadShaderBinary(const std::wstring& filename);
@@ -107,6 +111,7 @@ namespace Moon
 		bool OnWindowResize(WindowResizeEvent& e);
 
 		void DrawMenuBar();
+		void DrawDebugInfo();
 
 	private:
 		CommandQueueManager* mQueues = nullptr;
@@ -157,6 +162,13 @@ namespace Moon
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mRtvHeap;
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mDsvHeap;
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mSrvHeap;
+
+		Microsoft::WRL::ComPtr<ID3D12QueryHeap> mQueryHeap;
+		Microsoft::WRL::ComPtr<ID3D12Resource> mQueryResult;
+		UINT64 mTimestampFrequency;
+		int mFrameNumber = 0;
+		float mGpuTimeMS = 0.0f;
+
 		UINT mRtvDescriptorSize = 0;
 		UINT mDsvDescriptorSize = 0;
 		UINT mCbvSrvUavDescriptorSize = 0;

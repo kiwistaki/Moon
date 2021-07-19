@@ -23,6 +23,7 @@ namespace Moon
 
 		InitD3D12();
 		InitCommandObjects();
+		InitQuery();
 		InitSwapchain();
 		InitDescriptorHeaps();
 		Resize();
@@ -75,6 +76,8 @@ namespace Moon
 				{
 					mCamera->Update(mTimer.DeltaTime());
 					Draw();
+					GetQueryResult();
+					mFrameNumber++;
 				}
 				else
 				{
@@ -91,6 +94,10 @@ namespace Moon
 		//BeginFrame
 		DX_CHECK(mCommandAllocator->Reset());
 		DX_CHECK(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
+
+		// Get a timestamp at the beginning and end of the command list.
+		const UINT timestampHeapIndex = 2 * mCurrBackBuffer;
+		mCommandList->EndQuery(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex);
 
 		mCurrFrameResource = mFrameResources[mCurrBackBuffer].get();
 
@@ -156,12 +163,19 @@ namespace Moon
 		{
 			mImguiDrawer->BeginDrawImgui(mCommandList, mClientWidth, mClientHeight);
 			DrawMenuBar();
+			if(showImguiDemo)
+				ImGui::ShowDemoWindow(&showImguiDemo);
+			DrawDebugInfo();
 			mImguiDrawer->EndDrawImgui(mCommandList);
 		}
 
 		//EndFrame
 		mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(currentBackBuffer,
 			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+
+		//End Query
+		mCommandList->EndQuery(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex + 1);
+		mCommandList->ResolveQueryData(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex, 2, mQueryResult.Get(), timestampHeapIndex * sizeof(UINT64));
 
 		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(mCommandList.Get());
 
@@ -294,6 +308,8 @@ namespace Moon
 		}
 #endif
 
+		//DX_CHECK(mFactory->MakeWindowAssociation(mhMainWnd, DXGI_MWA_NO_ALT_ENTER));
+
 		mRtvDescriptorSize = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		mDsvDescriptorSize = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		mCbvSrvUavDescriptorSize = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -327,6 +343,28 @@ namespace Moon
 			nullptr,
 			IID_PPV_ARGS(mCommandList.GetAddressOf())));
 		mCommandList->Close();
+	}
+
+	void Application::InitQuery()
+	{
+		DX_CHECK(mQueues->GetGraphicsQueue()->GetCommandQueue()->GetTimestampFrequency(&mTimestampFrequency));
+
+		// Two timestamps for each frame.
+		const UINT resultCount = 2 * BACKBUFFER_COUNT;
+		const UINT resultBufferSize = resultCount * sizeof(UINT64);
+		D3D12_QUERY_HEAP_DESC timestampHeapDesc = {};
+		timestampHeapDesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+		timestampHeapDesc.Count = resultCount;
+
+		DX_CHECK(mDevice->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(resultBufferSize),
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&mQueryResult)
+		));
+		DX_CHECK(mDevice->CreateQueryHeap(&timestampHeapDesc, IID_PPV_ARGS(&mQueryHeap)));
 	}
 
 	void Application::InitSwapchain()
@@ -628,6 +666,25 @@ namespace Moon
 		}
 	}
 
+	void Application::GetQueryResult()
+	{
+		if (mFrameNumber > 0)
+		{
+			void* pData = nullptr;
+			const D3D12_RANGE emptyRange = {};
+			D3D12_RANGE readRange = {};
+			readRange.Begin = (2 * mCurrBackBuffer) * sizeof(UINT64);
+			readRange.End = readRange.Begin + 2 * sizeof(UINT64);
+
+			DX_CHECK(mQueryResult->Map(0, &readRange, &pData));
+			const UINT64* pTimestamps = reinterpret_cast<UINT64*>(static_cast<UINT8*>(pData) + readRange.Begin);
+			const UINT64 timeStampDelta = pTimestamps[1] - pTimestamps[0];
+			mQueryResult->Unmap(0, &emptyRange);
+
+			mGpuTimeMS = float((timeStampDelta * 1000)) / (float)(mTimestampFrequency);
+		}
+	}
+
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> Application::GetStaticSamplers()
 	{
 		const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
@@ -874,6 +931,23 @@ namespace Moon
 				ImGui::EndMenu();
 			}
 			ImGui::EndMainMenuBar();
+		}
+	}
+
+	void Application::DrawDebugInfo()
+	{
+		if (ImGui::Begin("Debug Informations"))
+		{
+			ImGui::Text("Performance");
+			ImGui::Text("CPU: %.2f ms", mTimer.DeltaTime()*1000);
+			ImGui::Text("GPU: %.2f ms", mGpuTimeMS);
+			ImGui::Separator();
+			ImGui::Text("Gpu Information");
+			std::wstring ws(mAdapterDesc.Description);
+			std::string gpuName(ws.begin(), ws.end());
+			ImGui::Text("Name: %s", gpuName.c_str());
+			ImGui::Text("VRAM: %d mb", mAdapterDesc.DedicatedVideoMemory /1024 /1024);
+			ImGui::End();
 		}
 	}
 
