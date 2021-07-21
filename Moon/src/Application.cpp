@@ -40,6 +40,8 @@ namespace Moon
 
 		mImguiDrawer = new ImguiDrawer(mhMainWnd, mDevice, mBackBufferFormat);
 
+		mFrameStats.Init();
+
 		isD3D12Initialized = true;
 	}
 
@@ -49,6 +51,7 @@ namespace Moon
 		delete mQueues;
 		delete mImguiDrawer;
 		delete mCamera;
+		mFrameStats.Deinit();
 
 		if (mRenderDoc)
 		{
@@ -72,6 +75,7 @@ namespace Moon
 			else
 			{
 				mTimer.Tick();
+				mTotalCpuTimeMS += mTimer.DeltaTime()*1000;
 				if (!mAppPaused)
 				{
 					mCamera->Update(mTimer.DeltaTime());
@@ -286,7 +290,7 @@ namespace Moon
 			}
 		}
 		// Create device
-		DX_CHECK(D3D12CreateDevice(mAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&mDevice)));
+		DX_CHECK(D3D12CreateDevice(mAdapter.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&mDevice)));
 		// Enable debug messages in debug mode.
 #if DX12_ENABLE_DEBUG_LAYER
 		ComPtr<ID3D12InfoQueue> infoQueue;
@@ -371,26 +375,21 @@ namespace Moon
 	{
 		mSwapchain.Reset();
 
-		DXGI_SWAP_CHAIN_DESC sd;
-		sd.BufferDesc.Width = mClientHeight;
-		sd.BufferDesc.Height = mClientWidth;
-		sd.BufferDesc.RefreshRate.Numerator = 60;
-		sd.BufferDesc.RefreshRate.Denominator = 1;
-		sd.BufferDesc.Format = mBackBufferFormat;
-		sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-		sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-		sd.SampleDesc.Count = m4xMsaaState ? 4 : 1;
-		sd.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
+		DXGI_SWAP_CHAIN_DESC1 sd;
+		ZeroMemory(&sd, sizeof(DXGI_SWAP_CHAIN_DESC1));
+		sd.Width = mClientHeight;
+		sd.Height = mClientWidth;
+		sd.Format = mBackBufferFormat;
+		sd.Scaling = DXGI_SCALING_NONE;
+		sd.SampleDesc.Count = 1;
+		sd.SampleDesc.Quality = 0;
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 		sd.BufferCount = BACKBUFFER_COUNT;
-		sd.OutputWindow = mhMainWnd;
-		sd.Windowed = true;
 		sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 		sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-		DX_CHECK(mFactory->CreateSwapChain(
-			mQueues->GetGraphicsQueue()->GetCommandQueue(),
-			&sd,
-			mSwapchain.GetAddressOf()));
+		sd.Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+		DX_CHECK(mFactory->CreateSwapChainForHwnd(mQueues->GetGraphicsQueue()->GetCommandQueue(), mhMainWnd, &sd, nullptr, nullptr, &mSwapchain));
+		DX_CHECK(mFactory->MakeWindowAssociation(mhMainWnd, DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER));
 	}
 
 	void Application::InitDescriptorHeaps()
@@ -434,7 +433,7 @@ namespace Moon
 			BACKBUFFER_COUNT,
 			mClientWidth, mClientHeight,
 			mBackBufferFormat,
-			DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
+			DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT));
 
 		mCurrBackBuffer = 0;
 
@@ -668,21 +667,18 @@ namespace Moon
 
 	void Application::GetQueryResult()
 	{
-		if (mFrameNumber > 0)
-		{
-			void* pData = nullptr;
-			const D3D12_RANGE emptyRange = {};
-			D3D12_RANGE readRange = {};
-			readRange.Begin = (2 * mCurrBackBuffer) * sizeof(UINT64);
-			readRange.End = readRange.Begin + 2 * sizeof(UINT64);
+		void* pData = nullptr;
+		const D3D12_RANGE emptyRange = {};
+		D3D12_RANGE readRange = {};
+		readRange.Begin = (2 * mCurrBackBuffer) * sizeof(UINT64);
+		readRange.End = readRange.Begin + 2 * sizeof(UINT64);
 
-			DX_CHECK(mQueryResult->Map(0, &readRange, &pData));
-			const UINT64* pTimestamps = reinterpret_cast<UINT64*>(static_cast<UINT8*>(pData) + readRange.Begin);
-			const UINT64 timeStampDelta = pTimestamps[1] - pTimestamps[0];
-			mQueryResult->Unmap(0, &emptyRange);
+		DX_CHECK(mQueryResult->Map(0, &readRange, &pData));
+		const UINT64* pTimestamps = reinterpret_cast<UINT64*>(static_cast<UINT8*>(pData) + readRange.Begin);
+		const UINT64 timeStampDelta = pTimestamps[1] - pTimestamps[0];
+		mQueryResult->Unmap(0, &emptyRange);
 
-			mGpuTimeMS = float((timeStampDelta * 1000)) / (float)(mTimestampFrequency);
-		}
+		mFrameStats.AddTimestamp(float((timeStampDelta * 1000)) / (float)(mTimestampFrequency));
 	}
 
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> Application::GetStaticSamplers()
@@ -939,13 +935,11 @@ namespace Moon
 		if (ImGui::Begin("Debug Informations"))
 		{
 			ImGui::Text("Performance");
-			ImGui::Text("CPU: %.2f ms", mTimer.DeltaTime()*1000);
-			ImGui::Text("GPU: %.2f ms", mGpuTimeMS);
+			ImGui::Text("CPU: %3.2f ms (avg %3.2f ms)", mTimer.DeltaTime()*1000, mTotalCpuTimeMS/mFrameNumber);
+			ImGui::Text("GPU: %3.2f ms (avg %3.2f ms)", mFrameStats.GetCurrentGpuTime(), mFrameStats.GetAverageGpuTime());
 			ImGui::Separator();
 			ImGui::Text("Gpu Information");
-			std::wstring ws(mAdapterDesc.Description);
-			std::string gpuName(ws.begin(), ws.end());
-			ImGui::Text("Name: %s", gpuName.c_str());
+			ImGui::Text("Name: %ls", mAdapterDesc.Description);
 			ImGui::Text("VRAM: %d mb", mAdapterDesc.DedicatedVideoMemory /1024 /1024);
 			ImGui::End();
 		}

@@ -61,6 +61,53 @@ namespace Moon
 		int BaseVertexLocation = 0;
 	};
 
+	struct FrameStats
+	{
+		float* gpuTimes;
+		int timestampIndex = 0;
+
+		static const int numberOfTimestamps = 100;
+
+		void Init()
+		{	
+			gpuTimes = new float[numberOfTimestamps];
+			for (size_t i = 0; i < numberOfTimestamps; i++)
+			{
+				gpuTimes[i] = 0.0f;
+			}
+		}
+
+		void Deinit()
+		{
+			delete gpuTimes;
+		}
+
+		void AddTimestamp(float ts)
+		{
+			gpuTimes[timestampIndex++] = ts;
+			timestampIndex = timestampIndex % numberOfTimestamps;
+		}
+
+		float GetCurrentGpuTime()
+		{
+			if (timestampIndex == 0)
+				return gpuTimes[numberOfTimestamps];
+			else
+				return gpuTimes[timestampIndex - 1];
+		}
+
+		float GetAverageGpuTime()
+		{
+			float avg = 0.0f;
+			for (size_t i = 0; i < numberOfTimestamps; i++)
+			{
+				avg += gpuTimes[i];
+			}
+			return avg /= numberOfTimestamps;
+		}
+
+	};
+
 	class Application
 	{
 	public:
@@ -146,7 +193,7 @@ namespace Moon
 		Microsoft::WRL::ComPtr<ID3D12Device8> mDevice;
 
 		int mCurrBackBuffer = 0;
-		Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapchain;
+		Microsoft::WRL::ComPtr<IDXGISwapChain1> mSwapchain;
 		Microsoft::WRL::ComPtr<ID3D12Resource> mSwapchainBuffer[BACKBUFFER_COUNT];
 		Microsoft::WRL::ComPtr<ID3D12Resource> mDepthStencilBuffer;
 		DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -167,7 +214,8 @@ namespace Moon
 		Microsoft::WRL::ComPtr<ID3D12Resource> mQueryResult;
 		UINT64 mTimestampFrequency;
 		int mFrameNumber = 0;
-		float mGpuTimeMS = 0.0f;
+		float mTotalCpuTimeMS = 0.0f;
+		FrameStats mFrameStats;
 
 		UINT mRtvDescriptorSize = 0;
 		UINT mDsvDescriptorSize = 0;
