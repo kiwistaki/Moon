@@ -204,17 +204,20 @@ namespace Moon
 		for (size_t i = 0; i < mOpaqueRitems.size(); ++i)
 		{
 			auto ri = mOpaqueRitems[i];
-			CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mSrvHeap->GetGPUDescriptorHandleForHeapStart());
-			tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvUavDescriptorSize);
+			RENDER_PASS(ri->Name.c_str())
+			{
+				CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mSrvHeap->GetGPUDescriptorHandleForHeapStart());
+				tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvUavDescriptorSize);
 
-			D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex * objCBByteSize;
+				D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex * objCBByteSize;
 
-			mCommandList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
-			mCommandList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
-			mCommandList->IASetPrimitiveTopology(ri->PrimitiveType);
-			mCommandList->SetGraphicsRootDescriptorTable(0, tex);
-			mCommandList->SetGraphicsRootConstantBufferView(1, objCBAddress);
-			mCommandList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
+				mCommandList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
+				mCommandList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
+				mCommandList->IASetPrimitiveTopology(ri->PrimitiveType);
+				mCommandList->SetGraphicsRootDescriptorTable(0, tex);
+				mCommandList->SetGraphicsRootConstantBufferView(1, objCBAddress);
+				mCommandList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
+			}
 		}
 	}
 
@@ -647,6 +650,7 @@ namespace Moon
 		mMaterials["lostEmpire"] = std::move(lostEmpire);
 
 		auto leRitem = std::make_unique<RenderItem>();
+		leRitem->Name = "lostEmpire";
 		leRitem->ObjCBIndex = 0;
 		leRitem->Mat = mMaterials["lostEmpire"].get();
 		leRitem->Geo = mGeometries["lostEmpire"].get();
