@@ -1,7 +1,8 @@
 #include "Application.h"
 #include "dx_utils.h"
 
-int main(int argc, char** argv)
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
+	PSTR cmdLine, int showCmd)
 {
 	try
 	{
@@ -14,5 +15,6 @@ int main(int argc, char** argv)
 	catch (DxException e)
 	{
 		MessageBox(nullptr, e.ToString().c_str(), L"DX12 Error", MB_OK);
+		return -1;
 	}
 }

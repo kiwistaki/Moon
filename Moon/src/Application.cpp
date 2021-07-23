@@ -28,12 +28,12 @@ namespace Moon
 		InitDescriptorHeaps();
 		Resize();
 
-		DX_CHECK(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
+		DX_CHECK(mCommandList[0]->Reset(mCommandAllocator[0].Get(), nullptr));
 		InitPipeline();
 		LoadImages();
 		LoadMeshes();
 		InitScene();
-		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(mCommandList.Get());
+		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(mCommandList[0].Get());
 
 		mCamera = new Camera(static_cast<float>(mClientWidth), static_cast<float>(mClientHeight));
 		mCamera->SetPosition(-5.0f, 12.0f, 2.0f);
@@ -95,13 +95,16 @@ namespace Moon
 	{
 		mQueues->GetGraphicsQueue()->WaitForFenceCPUBlocking(mCurrentFence);
 
+		auto cmdList = mCommandList[mCurrBackBuffer];
+		auto cmdAllocator = mCommandAllocator[mCurrBackBuffer];
+
 		//BeginFrame
-		DX_CHECK(mCommandAllocator->Reset());
-		DX_CHECK(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
+		DX_CHECK(cmdAllocator->Reset());
+		DX_CHECK(cmdList->Reset(cmdAllocator.Get(), nullptr));
 
 		// Get a timestamp at the beginning and end of the command list.
 		const UINT timestampHeapIndex = 2 * mCurrBackBuffer;
-		mCommandList->EndQuery(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex);
+		cmdList->EndQuery(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex);
 
 		mCurrFrameResource = mFrameResources[mCurrBackBuffer].get();
 
@@ -145,85 +148,81 @@ namespace Moon
 			mCurrBackBuffer,
 			mRtvDescriptorSize);
 
-		mCommandList->RSSetViewports(1, &mScreenViewport);
-		mCommandList->RSSetScissorRects(1, &mScissorRect);
+		cmdList->RSSetViewports(1, &mScreenViewport);
+		cmdList->RSSetScissorRects(1, &mScissorRect);
 
-		mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(currentBackBuffer,
+		cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(currentBackBuffer,
 			D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
 		FLOAT clearColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
-		mCommandList->ClearRenderTargetView(currentBackBufferView, clearColor, 0, nullptr);
-		mCommandList->ClearDepthStencilView(mDsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-		mCommandList->OMSetRenderTargets(1, &currentBackBufferView, true, &mDsvHeap->GetCPUDescriptorHandleForHeapStart());
+		cmdList->ClearRenderTargetView(currentBackBufferView, clearColor, 0, nullptr);
+		cmdList->ClearDepthStencilView(mDsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+		cmdList->OMSetRenderTargets(1, &currentBackBufferView, true, &mDsvHeap->GetCPUDescriptorHandleForHeapStart());
 
 		//BeginDraw
 		RENDER_PASS("Mesh")
 		{
-			DrawMesh();
+			cmdList->SetPipelineState(mWireframeRendering ? mWireframeMeshPSO.Get() : mMeshPSO.Get());
+			ID3D12DescriptorHeap* descriptorHeaps[] = { mSrvHeap.Get() };
+			cmdList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+			cmdList->SetGraphicsRootSignature(mMeshRootSig.Get());
+			auto passCB = mCurrFrameResource->PassCB->Resource();
+			cmdList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
+
+			UINT objCBByteSize = CalcConstantBufferByteSize(sizeof(PerObjectCB));
+			auto objectCB = mCurrFrameResource->ObjectCB->Resource();
+
+			// For each render item...
+			for (size_t i = 0; i < mOpaqueRitems.size(); ++i)
+			{
+				auto ri = mOpaqueRitems[i];
+				RENDER_PASS(ri->Name.c_str())
+				{
+					CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mSrvHeap->GetGPUDescriptorHandleForHeapStart());
+					tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvUavDescriptorSize);
+
+					D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex * objCBByteSize;
+
+					cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
+					cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
+					cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
+					cmdList->SetGraphicsRootDescriptorTable(0, tex);
+					cmdList->SetGraphicsRootConstantBufferView(1, objCBAddress);
+					cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
+				}
+			}
 		}
 
 		//DrawImGui
 		RENDER_PASS("Imgui")
 		{
-			mImguiDrawer->BeginDrawImgui(mCommandList, mClientWidth, mClientHeight);
+			mImguiDrawer->BeginDrawImgui(cmdList, mClientWidth, mClientHeight);
 			DrawMenuBar();
 			if(showImguiDemo)
 				ImGui::ShowDemoWindow(&showImguiDemo);
 			DrawDebugInfo();
-			mImguiDrawer->EndDrawImgui(mCommandList);
+			mImguiDrawer->EndDrawImgui(cmdList);
 		}
 
 		//EndFrame
-		mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(currentBackBuffer,
+		cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(currentBackBuffer,
 			D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
 
 		//End Query
-		mCommandList->EndQuery(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex + 1);
-		mCommandList->ResolveQueryData(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex, 2, mQueryResult.Get(), timestampHeapIndex * sizeof(UINT64));
+		cmdList->EndQuery(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex + 1);
+		cmdList->ResolveQueryData(mQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, timestampHeapIndex, 2, mQueryResult.Get(), timestampHeapIndex * sizeof(UINT64));
 
-		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(mCommandList.Get());
+		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(cmdList.Get());
 
 		// swap the back and front buffers
-		DX_CHECK(mSwapchain->Present(1, 0));
+		DX_CHECK(mSwapchain->Present(mVSync?1:0, 0));
 		mCurrBackBuffer = (mCurrBackBuffer + 1) % BACKBUFFER_COUNT;
-	}
-
-	void Application::DrawMesh()
-	{
-		mCommandList->SetPipelineState(mWireframeRendering ? mWireframeMeshPSO.Get() : mMeshPSO.Get());
-		ID3D12DescriptorHeap* descriptorHeaps[] = { mSrvHeap.Get() };
-		mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-		mCommandList->SetGraphicsRootSignature(mMeshRootSig.Get());
-		auto passCB = mCurrFrameResource->PassCB->Resource();
-		mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
-
-		UINT objCBByteSize = CalcConstantBufferByteSize(sizeof(PerObjectCB));
-		auto objectCB = mCurrFrameResource->ObjectCB->Resource();
-
-		// For each render item...
-		for (size_t i = 0; i < mOpaqueRitems.size(); ++i)
-		{
-			auto ri = mOpaqueRitems[i];
-			RENDER_PASS(ri->Name.c_str())
-			{
-				CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mSrvHeap->GetGPUDescriptorHandleForHeapStart());
-				tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvUavDescriptorSize);
-
-				D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex * objCBByteSize;
-
-				mCommandList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
-				mCommandList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
-				mCommandList->IASetPrimitiveTopology(ri->PrimitiveType);
-				mCommandList->SetGraphicsRootDescriptorTable(0, tex);
-				mCommandList->SetGraphicsRootConstantBufferView(1, objCBAddress);
-				mCommandList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
-			}
-		}
 	}
 
 	void Application::InitMainWindow()
 	{
-		WNDCLASS wc;
+		WNDCLASSEXW wc = {};
+		wc.cbSize = sizeof(WNDCLASSEX);
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		wc.lpfnWndProc = MsgProc;
 		wc.cbClsExtra = 0;
@@ -244,18 +243,25 @@ namespace Moon
 		wc.lpszMenuName = 0;
 		wc.lpszClassName = L"MainWnd";
 
-		if (!RegisterClass(&wc))
+		if (!RegisterClassExW(&wc))
 		{
 			MessageBox(0, L"RegisterClass Failed.", 0, 0);
 		}
 
-		mRect = { 0, 0, mClientWidth, mClientHeight };
-		AdjustWindowRect(&mRect, WS_OVERLAPPEDWINDOW, false);
-		int width = mRect.right - mRect.left;
-		int height = mRect.bottom - mRect.top;
+		int screenWidth = ::GetSystemMetrics(SM_CXSCREEN);
+		int screenHeight = ::GetSystemMetrics(SM_CYSCREEN);
 
-		mhMainWnd = CreateWindow(L"MainWnd", mMainWndCaption.c_str(),
-			WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0, mhAppInst, 0);
+		RECT windowRect = { 0, 0, static_cast<LONG>(mClientWidth), static_cast<LONG>(mClientHeight) };
+		::AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
+
+		int windowWidth = windowRect.right - windowRect.left;
+		int windowHeight = windowRect.bottom - windowRect.top;
+
+		int windowX = std::max<int>(0, (screenWidth - windowWidth) / 2);
+		int windowY = std::max<int>(0, (screenHeight - windowHeight) / 2);
+
+		mhMainWnd = CreateWindowExW(NULL, L"MainWnd", mMainWndCaption.c_str(),
+			WS_OVERLAPPEDWINDOW, windowX, windowY, windowWidth, windowHeight, 0, 0, mhAppInst, 0);
 		if (!mhMainWnd)
 		{
 			MessageBox(0, L"CreateWindow Failed.", 0, 0);
@@ -278,6 +284,9 @@ namespace Moon
 		createFactoryFlag = DXGI_CREATE_FACTORY_DEBUG;
 #endif
 		DX_CHECK(CreateDXGIFactory2(createFactoryFlag, IID_PPV_ARGS(&mFactory)));
+
+		D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_12_1;
+
 		// Enumerate adapters
 		Microsoft::WRL::ComPtr<IDXGIAdapter1> candidateAdapter;
 		for (uint32_t i = 0; mFactory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&candidateAdapter)) != DXGI_ERROR_NOT_FOUND; ++i)
@@ -285,15 +294,18 @@ namespace Moon
 			DXGI_ADAPTER_DESC1 adapterDesc;
 			candidateAdapter->GetDesc1(&adapterDesc);
 			if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
-				SUCCEEDED(D3D12CreateDevice(candidateAdapter.Get(), D3D_FEATURE_LEVEL_12_1, __uuidof(ID3D12Device), nullptr)))
+				SUCCEEDED(D3D12CreateDevice(candidateAdapter.Get(), featureLevel, __uuidof(ID3D12Device), nullptr)))
 			{
 				mAdapterDesc = adapterDesc;
 				DX_CHECK(candidateAdapter.As(&mAdapter));
 				break;
 			}
 		}
+
 		// Create device
-		DX_CHECK(D3D12CreateDevice(mAdapter.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&mDevice)));
+		if (!SUCCEEDED(D3D12CreateDevice(mAdapter.Get(), featureLevel, IID_PPV_ARGS(&mDevice))))
+			throw std::runtime_error("Unable to create Device");
+
 		// Enable debug messages in debug mode.
 #if DX12_ENABLE_DEBUG_LAYER
 		ComPtr<ID3D12InfoQueue> infoQueue;
@@ -315,41 +327,46 @@ namespace Moon
 		}
 #endif
 
-		//DX_CHECK(mFactory->MakeWindowAssociation(mhMainWnd, DXGI_MWA_NO_ALT_ENTER));
+		bool allowTearing = true;
+		ComPtr<IDXGIFactory4> factory4;
+		if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory4))))
+		{
+			ComPtr<IDXGIFactory5> factory5;
+			if (SUCCEEDED(factory4.As(&factory5)))
+			{
+				if (FAILED(factory5->CheckFeatureSupport(
+					DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+					&allowTearing, sizeof(allowTearing))))
+				{
+					allowTearing = FALSE;
+				}
+			}
+		}
 
 		mRtvDescriptorSize = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		mDsvDescriptorSize = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		mCbvSrvUavDescriptorSize = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-		D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msQualityLevels;
-		msQualityLevels.Format = mBackBufferFormat;
-		msQualityLevels.SampleCount = 4;
-		msQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-		msQualityLevels.NumQualityLevels = 0;
-		DX_CHECK(mDevice->CheckFeatureSupport(
-			D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-			&msQualityLevels,
-			sizeof(msQualityLevels)));
-
-		m4xMsaaQuality = msQualityLevels.NumQualityLevels;
-		assert(m4xMsaaQuality > 0 && "Unexpected MSAA quality level.");
 	}
 
 	void Application::InitCommandObjects()
 	{
 		mQueues = new Moon::CommandQueueManager(mDevice.Get());
 
-		DX_CHECK(mDevice->CreateCommandAllocator(
-			D3D12_COMMAND_LIST_TYPE_DIRECT,
-			IID_PPV_ARGS(mCommandAllocator.GetAddressOf())));
+		for (int i = 0; i < BACKBUFFER_COUNT; i++)
+		{
+			DX_CHECK(mDevice->CreateCommandAllocator(
+				D3D12_COMMAND_LIST_TYPE_DIRECT,
+				IID_PPV_ARGS(mCommandAllocator[i].GetAddressOf())));
 
-		DX_CHECK(mDevice->CreateCommandList(
-			0,
-			D3D12_COMMAND_LIST_TYPE_DIRECT,
-			mCommandAllocator.Get(),
-			nullptr,
-			IID_PPV_ARGS(mCommandList.GetAddressOf())));
-		mCommandList->Close();
+			DX_CHECK(mDevice->CreateCommandList(
+				0,
+				D3D12_COMMAND_LIST_TYPE_DIRECT,
+				mCommandAllocator[i].Get(),
+				nullptr,
+				IID_PPV_ARGS(mCommandList[i].GetAddressOf())));
+		}
+		mCommandList[0]->Close();
+		mCommandList[1]->Close();
 	}
 
 	void Application::InitQuery()
@@ -426,7 +443,7 @@ namespace Moon
 
 		mQueues->GetGraphicsQueue()->WaitForIdle();
 
-		DX_CHECK(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
+		DX_CHECK(mCommandList[0]->Reset(mCommandAllocator[0].Get(), nullptr));
 
 		for (int i = 0; i < BACKBUFFER_COUNT; ++i)
 			mSwapchainBuffer[i].Reset();
@@ -457,8 +474,8 @@ namespace Moon
 		depthStencilDesc.DepthOrArraySize = 1;
 		depthStencilDesc.MipLevels = 1;
 		depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
-		depthStencilDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
-		depthStencilDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
+		depthStencilDesc.SampleDesc.Count = 1;
+		depthStencilDesc.SampleDesc.Quality = 0;
 		depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
@@ -481,10 +498,10 @@ namespace Moon
 		dsvDesc.Texture2D.MipSlice = 0;
 		mDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), &dsvDesc, mDsvHeap->GetCPUDescriptorHandleForHeapStart());
 
-		mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
+		mCommandList[0]->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
 			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 
-		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(mCommandList.Get());
+		mCurrentFence = mQueues->GetGraphicsQueue()->ExecuteCommandList(mCommandList[0].Get());
 
 		mScreenViewport.TopLeftX = 0;
 		mScreenViewport.TopLeftY = 0;
@@ -562,8 +579,8 @@ namespace Moon
 		meshPsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		meshPsoDesc.NumRenderTargets = 1;
 		meshPsoDesc.RTVFormats[0] = mBackBufferFormat;
-		meshPsoDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
-		meshPsoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
+		meshPsoDesc.SampleDesc.Count = 1;
+		meshPsoDesc.SampleDesc.Quality = 0;
 		meshPsoDesc.DSVFormat = mDepthStencilFormat;
 		DX_CHECK(mDevice->CreateGraphicsPipelineState(&meshPsoDesc, IID_PPV_ARGS(&mMeshPSO)));
 
@@ -577,7 +594,7 @@ namespace Moon
 		lostEmpire->Name = "lostEmpireTex";
 		lostEmpire->Filename = L"../assets/lost-empire/lost_empire-RGBA.dds";
 		DX_CHECK(DirectX::CreateDDSTextureFromFile12(mDevice.Get(),
-			mCommandList.Get(), lostEmpire->Filename.c_str(),
+			mCommandList[mCurrBackBuffer].Get(), lostEmpire->Filename.c_str(),
 			lostEmpire->Resource, lostEmpire->UploadHeap));
 
 		mTextures[lostEmpire->Name] = std::move(lostEmpire);
@@ -625,9 +642,9 @@ namespace Moon
 		CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
 
 		geo->VertexBufferGPU = CreateDefaultBuffer(mDevice.Get(),
-			mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
+			mCommandList[mCurrBackBuffer].Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
 		geo->IndexBufferGPU = CreateDefaultBuffer(mDevice.Get(),
-			mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+			mCommandList[mCurrBackBuffer].Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
 
 		geo->VertexByteStride = sizeof(Vertex);
 		geo->VertexBufferByteSize = vbByteSize;
@@ -825,10 +842,6 @@ namespace Moon
 					SWP_FRAMECHANGED | SWP_NOACTIVATE);
 				::ShowWindow(mhMainWnd, SW_MAXIMIZE);
 
-				/*MN_ENGINE_INFO("Fullscreen Rect-> L:{0} R:{1} T:{2} B:{3}",
-					monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.right,
-					monitorInfo.rcMonitor.top, monitorInfo.rcMonitor.bottom);*/
-
 				//Resize Swapchain to match fullscreen
 				mClientWidth = monitorInfo.rcMonitor.right;
 				mClientHeight = monitorInfo.rcMonitor.bottom;
@@ -852,6 +865,12 @@ namespace Moon
 				OnResize();
 			}
 		}
+	}
+
+	void Application::ToggleVSync()
+	{
+		mVSync = !mVSync; 
+		std::cout << "VSync is " << (mVSync ? "On" : "Off") << std::endl;
 	}
 
 	void Application::OnMouseDown(WPARAM btnState, int x, int y)
@@ -1089,6 +1108,10 @@ namespace Moon
 			else if ((int)wParam == VK_F1)
 			{
 				gApplication->ToggleWireframeRendering();
+			}
+			else if ((int)wParam == VK_F2)
+			{
+				gApplication->ToggleVSync();
 			}
 			gApplication->OnKeyUp(wParam);
 			return 0;

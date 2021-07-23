@@ -42,7 +42,7 @@ struct ScopedPerfMarker
 };
 
 #define RENDER_PASS(name) \
-	if (auto scopedPerfMarker = ScopedPerfMarker(mCommandList.Get(), name))
+	if (auto scopedPerfMarker = ScopedPerfMarker(cmdList.Get(), name))
 
 inline std::wstring AnsiToWString(const std::string& str)
 {

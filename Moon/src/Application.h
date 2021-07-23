@@ -149,6 +149,7 @@ namespace Moon
 
 		void SetFullscreen(bool fullscreen);
 		void ToggleWireframeRendering() { mWireframeRendering = !mWireframeRendering; }
+		void ToggleVSync();
 		void OnMouseDown(WPARAM btnState, int x, int y);
 		void OnMouseUp(WPARAM btnState, int x, int y);
 		void OnMouseMove(WPARAM btnState, int x, int y);
@@ -183,9 +184,9 @@ namespace Moon
 		int				mPreviousClientWidth = 1600;
 		int				mClientHeight = 900;
 		int				mPreviousClientHeight = 900;
-		bool			m4xMsaaState = false;
 		std::wstring	mMainWndCaption = L"Moon";
 		bool			mWireframeRendering = false;
+		bool			mVSync = true;
 
 		//D3D12 related stuff
 		Microsoft::WRL::ComPtr<IDXGIFactory6> mFactory;
@@ -199,12 +200,11 @@ namespace Moon
 		Microsoft::WRL::ComPtr<ID3D12Resource> mDepthStencilBuffer;
 		DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 		DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-		UINT m4xMsaaQuality = 0;
 		D3D12_VIEWPORT mScreenViewport;
 		D3D12_RECT mScissorRect;
 		
-		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mCommandAllocator;
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList;
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mCommandAllocator[BACKBUFFER_COUNT];
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList[BACKBUFFER_COUNT];
 		UINT64 mCurrentFence = 0;
 
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mRtvHeap;
