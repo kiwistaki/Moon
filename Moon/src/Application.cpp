@@ -9,10 +9,10 @@
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
-Moon::Application* gApplication = nullptr;
-
 namespace Moon
 {
+	Application* Application::gApplication = nullptr;
+	
 	void Application::Init()
 	{
 		gApplication = this;

@@ -119,9 +119,16 @@ namespace Moon
 
 		void OnEvent(Event& e);
 		static LRESULT MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+		static Application* GetInstance() { return gApplication; }
+		void OnResize();
+		void PauseApp(bool pause) { mAppPaused = pause; }
+		void PauseTimer(bool pause) { if(pause) mTimer.Stop(); else mTimer.Start(); }
+		void SetFullscreen(bool fullscreen);
+		void ToggleWireframeRendering() { mWireframeRendering = !mWireframeRendering; }
+		void ToggleVSync();
+		bool IsD3D12Initialized() {return isD3D12Initialized;}
 
 	private:
-		void DrawMesh();
 		void InitMainWindow();
 		void InitD3D12();
 		void InitCommandObjects();
@@ -147,22 +154,19 @@ namespace Moon
 			UINT64 byteSize,
 			Microsoft::WRL::ComPtr<ID3D12Resource>& uploadBuffer);
 
-		void SetFullscreen(bool fullscreen);
-		void ToggleWireframeRendering() { mWireframeRendering = !mWireframeRendering; }
-		void ToggleVSync();
 		void OnMouseDown(WPARAM btnState, int x, int y);
 		void OnMouseUp(WPARAM btnState, int x, int y);
 		void OnMouseMove(WPARAM btnState, int x, int y);
 		void OnMouseScroll(short x, short y);
 		void OnKeyUp(const WPARAM key);
-		void OnKeyDown(const WPARAM key, const uint16_t repeatCount);
-		void OnResize();
+		void OnKeyDown(const WPARAM key, const uint16_t repeatCount);	
 		bool OnWindowResize(WindowResizeEvent& e);
 
 		void DrawMenuBar();
 		void DrawDebugInfo();
 
 	private:
+		static Application* gApplication;
 		CommandQueueManager* mQueues = nullptr;
 		RenderDoc* mRenderDoc = nullptr;
 		Timer mTimer;
