@@ -10,6 +10,7 @@
 #include "Timer.h"
 #include "Event.h"
 #include "ImguiDrawer.h"
+#include "Window.h"
 
 namespace Moon
 {
@@ -117,10 +118,8 @@ namespace Moon
 		void Draw();
 		void Run();
 
-		void OnEvent(Event& e);
-		static LRESULT MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 		static Application* GetInstance() { return gApplication; }
-		void OnResize();
+		void OnEvent(Event& e);
 		void PauseApp(bool pause) { mAppPaused = pause; }
 		void PauseTimer(bool pause) { if(pause) mTimer.Stop(); else mTimer.Start(); }
 		void SetFullscreen(bool fullscreen);
@@ -154,12 +153,6 @@ namespace Moon
 			UINT64 byteSize,
 			Microsoft::WRL::ComPtr<ID3D12Resource>& uploadBuffer);
 
-		void OnMouseDown(WPARAM btnState, int x, int y);
-		void OnMouseUp(WPARAM btnState, int x, int y);
-		void OnMouseMove(WPARAM btnState, int x, int y);
-		void OnMouseScroll(short x, short y);
-		void OnKeyUp(const WPARAM key);
-		void OnKeyDown(const WPARAM key, const uint16_t repeatCount);	
 		bool OnWindowResize(WindowResizeEvent& e);
 
 		void DrawMenuBar();
@@ -167,6 +160,7 @@ namespace Moon
 
 	private:
 		static Application* gApplication;
+		Window* mWindow = nullptr;
 		CommandQueueManager* mQueues = nullptr;
 		RenderDoc* mRenderDoc = nullptr;
 		Timer mTimer;
@@ -174,23 +168,9 @@ namespace Moon
 		ImguiDrawer* mImguiDrawer = nullptr;
 		bool showImguiDemo = false;
 
-		//Win32 stuff
-		HINSTANCE		mhAppInst = nullptr; // application instance handle
-		HWND			mhMainWnd = nullptr; // main window handle
-		RECT			mRect;
-		bool			mRunning = true;
-		bool			mMinimized = false;
-		bool			mAppPaused = false;  // is the application paused?
-		bool			mMaximized = false;  // is the application maximized?
-		bool			mResizing = false;   // are the resize bars being dragged?
-		bool			mFullscreenState = false;// fullscreen enabled
-		int				mClientWidth = 1600;
-		int				mPreviousClientWidth = 1600;
-		int				mClientHeight = 900;
-		int				mPreviousClientHeight = 900;
-		std::wstring	mMainWndCaption = L"Moon";
-		bool			mWireframeRendering = false;
-		bool			mVSync = true;
+		bool mAppPaused = false;
+		bool mWireframeRendering = false;
+		bool mVSync = true;
 
 		//D3D12 related stuff
 		Microsoft::WRL::ComPtr<IDXGIFactory6> mFactory;

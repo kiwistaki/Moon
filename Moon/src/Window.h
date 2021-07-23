@@ -10,6 +10,10 @@ namespace Moon
 		Window();
 		~Window();
 
+		HWND GetWindowHandle() const { return mhMainWnd; }
+		int GetWidth() const { return mClientWidth; }
+		int GetHeight() const { return mClientHeight; }
+
 		static LRESULT MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 		void SetFullscreen(bool fullscreen);

@@ -7,7 +7,10 @@ namespace Moon
 	Moon::Window* gWindow = nullptr;
 
 	Window::Window()
+		:mRect{0,0,0,0}
 	{
+		gWindow = this;
+
 		WNDCLASSEXW wc = {};
 		wc.cbSize = sizeof(WNDCLASSEX);
 		wc.style = CS_HREDRAW | CS_VREDRAW;
@@ -38,11 +41,11 @@ namespace Moon
 		int screenWidth = ::GetSystemMetrics(SM_CXSCREEN);
 		int screenHeight = ::GetSystemMetrics(SM_CYSCREEN);
 
-		RECT windowRect = { 0, 0, static_cast<LONG>(mClientWidth), static_cast<LONG>(mClientHeight) };
-		::AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
+		mRect = { 0, 0, static_cast<LONG>(mClientWidth), static_cast<LONG>(mClientHeight) };
+		::AdjustWindowRect(&mRect, WS_OVERLAPPEDWINDOW, FALSE);
 
-		int windowWidth = windowRect.right - windowRect.left;
-		int windowHeight = windowRect.bottom - windowRect.top;
+		int windowWidth = mRect.right - mRect.left;
+		int windowHeight = mRect.bottom - mRect.top;
 
 		int windowX = std::max<int>(0, (screenWidth - windowWidth) / 2);
 		int windowY = std::max<int>(0, (screenHeight - windowHeight) / 2);
@@ -308,6 +311,12 @@ namespace Moon
 	void Window::OnResize()
 	{
 		WindowResizeEvent event(mClientWidth, mClientHeight);
+
+		if (mClientWidth == 0 || mClientHeight == 0)
+			mMinimized = true;
+		else
+			mMinimized = false;
+
 		Application::GetInstance()->OnEvent(event);
 	}
 }
