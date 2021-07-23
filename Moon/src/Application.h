@@ -122,13 +122,12 @@ namespace Moon
 		void OnEvent(Event& e);
 		void PauseApp(bool pause) { mAppPaused = pause; }
 		void PauseTimer(bool pause) { if(pause) mTimer.Stop(); else mTimer.Start(); }
-		void SetFullscreen(bool fullscreen);
 		void ToggleWireframeRendering() { mWireframeRendering = !mWireframeRendering; }
 		void ToggleVSync();
 		bool IsD3D12Initialized() {return isD3D12Initialized;}
 
 	private:
-		void InitMainWindow();
+		bool EnumerateAdapters(D3D_FEATURE_LEVEL featureLevel);
 		void InitD3D12();
 		void InitCommandObjects();
 		void InitQuery();

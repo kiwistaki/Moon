@@ -215,6 +215,24 @@ namespace Moon
 		mCurrBackBuffer = (mCurrBackBuffer + 1) % BACKBUFFER_COUNT;
 	}
 
+	bool Application::EnumerateAdapters(D3D_FEATURE_LEVEL featureLevel)
+	{
+		Microsoft::WRL::ComPtr<IDXGIAdapter1> candidateAdapter;
+		for (uint32_t i = 0; mFactory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&candidateAdapter)) != DXGI_ERROR_NOT_FOUND; ++i)
+		{
+			DXGI_ADAPTER_DESC1 adapterDesc;
+			candidateAdapter->GetDesc1(&adapterDesc);
+			if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
+				SUCCEEDED(D3D12CreateDevice(candidateAdapter.Get(), featureLevel, __uuidof(ID3D12Device), nullptr)))
+			{
+				mAdapterDesc = adapterDesc;
+				DX_CHECK(candidateAdapter.As(&mAdapter));
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void Application::InitD3D12()
 	{
 #if DX12_ENABLE_DEBUG_LAYER
@@ -229,23 +247,25 @@ namespace Moon
 #endif
 		DX_CHECK(CreateDXGIFactory2(createFactoryFlag, IID_PPV_ARGS(&mFactory)));
 
-		D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_12_1;
-
 		// Enumerate adapters
-		Microsoft::WRL::ComPtr<IDXGIAdapter1> candidateAdapter;
-		for (uint32_t i = 0; mFactory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&candidateAdapter)) != DXGI_ERROR_NOT_FOUND; ++i)
+		D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_12_1;
+		if (!EnumerateAdapters(featureLevel))
 		{
-			DXGI_ADAPTER_DESC1 adapterDesc;
-			candidateAdapter->GetDesc1(&adapterDesc);
-			if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
-				SUCCEEDED(D3D12CreateDevice(candidateAdapter.Get(), featureLevel, __uuidof(ID3D12Device), nullptr)))
+			featureLevel = D3D_FEATURE_LEVEL_12_0;
+			if (!EnumerateAdapters(featureLevel))
 			{
-				mAdapterDesc = adapterDesc;
-				DX_CHECK(candidateAdapter.As(&mAdapter));
-				break;
+				featureLevel = D3D_FEATURE_LEVEL_11_1;
+				if (!EnumerateAdapters(featureLevel))
+				{
+					featureLevel = D3D_FEATURE_LEVEL_11_0;
+					if (!EnumerateAdapters(featureLevel))
+					{
+						throw std::runtime_error("Unable to find a high performance GPU");
+					}
+				}
 			}
 		}
-
+		
 		// Create device
 		if (!SUCCEEDED(D3D12CreateDevice(mAdapter.Get(), featureLevel, IID_PPV_ARGS(&mDevice))))
 			throw std::runtime_error("Unable to create Device");
